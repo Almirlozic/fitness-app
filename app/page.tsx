@@ -1,69 +1,72 @@
-import Image from "next/image";
+import { AppHeader } from "./components/AppHeader";
+import { BottomNav } from "./components/BottomNav";
+import { ExerciseList } from "./components/ExerciseList";
+import { LedgerFooter } from "./components/LedgerFooter";
+import { LogSetPanel } from "./components/LogSetPanel";
+import { PageHero } from "./components/PageHero";
+import { StatsSummary } from "./components/StatsSummary";
+import { FormMessage } from "./components/TextField";
+import { formatPercent, todayIso } from "@/lib/format";
+import { getExerciseSummaries } from "@/lib/sets";
 
-export default function Home() {
+export default async function ProgressionPage({ searchParams }: PageProps<"/">) {
+  const { besked } = await searchParams;
+  const today = todayIso();
+  const exercises = await getExerciseSummaries(today);
+
+  // Senest loggede øvelse med fremgang i denne måned
+  const improved = exercises.find(
+    (e) => e.thisMonth.kind === "change" && e.thisMonth.percent > 0,
+  );
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <>
+      <AppHeader />
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-margin pt-16 pb-24 md:px-margin-tablet">
+        {besked === "adgangskode-gemt" && (
+          <div className="mt-space-lg">
+            <FormMessage status="success">Din adgangskode er gemt</FormMessage>
+          </div>
+        )}
+        <PageHero
+          title="Overblik"
+          description="Log et sæt, når du vil. Følg dine øvelser, seneste løft og vægtstigninger."
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        <StatsSummary
+          stats={[
+            {
+              label: "Registrerede øvelser",
+              value: String(exercises.length),
+              caption: "I alt i arkiv",
+            },
+            {
+              label: "Seneste forbedring",
+              value:
+                improved?.thisMonth.kind === "change"
+                  ? formatPercent(improved.thisMonth.percent)
+                  : "—",
+              caption: improved ? `↑ ${improved.name}` : "Ingen denne måned",
+              emphasizeCaption: Boolean(improved),
+            },
+          ]}
+        />
+        <LogSetPanel
+          defaultOpen={exercises.length === 0}
+          today={today}
+          ownExercises={exercises.map((e) => ({
+            name: e.name,
+            wgerExerciseId: e.wgerExerciseId,
+            lastWeightKg: e.latest.weight_kg,
+            lastReps: e.latest.reps,
+          }))}
+        />
+        <ExerciseList exercises={exercises} />
+        <LedgerFooter
+          left="[ Form øvelsesbibliotek ]"
+          right={`[ ${today.slice(0, 4)} / Protokol ]`}
+        />
       </main>
-    </div>
+      <BottomNav activeHref="/" />
+    </>
   );
 }
