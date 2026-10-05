@@ -64,6 +64,23 @@
   --font-mono: var(--font-space-mono);
 }
 
+/*
+ * iPhone zoomer ind, når man trykker i et felt med skrift under 16px.
+ * Alle felter er derfor mindst 16px som standard (klasser som text-body-lg
+ * og større overskriver det stadig). Giv aldrig et felt en mindre skrift.
+ */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 body {
   background: var(--color-surface);
   color: var(--color-on-surface);

@@ -117,7 +117,7 @@ export function LogSetForm({
             value={date}
             max={today}
             onChange={(e) => setDate(e.target.value)}
-            className="h-12 w-full border border-surface-container-high bg-surface-container-lowest px-space-sm font-mono text-body-md text-primary focus:border-primary focus:outline-none"
+            className="h-12 w-full border border-surface-container-high bg-surface-container-lowest px-space-sm font-mono text-body-lg text-primary focus:border-primary focus:outline-none"
           />
           {errors.performed_on && <FieldError>{errors.performed_on}</FieldError>}
         </div>
