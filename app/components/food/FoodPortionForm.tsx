@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { type FoodFormState, logFood } from "@/app/(app)/kost/actions";
-import { MEALS, type Meal, macrosForGrams } from "@/lib/food";
+import { MEALS, type Meal, pickPortion } from "@/lib/food";
 import {
   type FoodChoice,
   NUTRIENT_FIELDS,
@@ -14,13 +14,13 @@ import { formatNumber } from "@/lib/format";
 import { parseDecimal } from "@/lib/profile-schema";
 import { DecimalField } from "../DecimalField";
 import { ChoiceButtons } from "../profile/ChoiceButtons";
-import { toDecimalInput } from "../Stepper";
+import { type PortionValue, PortionInput, toPortionValue, useFoodUnits } from "./PortionInput";
 import { FormMessage, SubmitButton } from "../TextField";
 
 /** Hvordan serveren skal behandle varen – se logFood i kost/actions.ts */
-function modeFor(food: FoodChoice, missing: NutrientField[]) {
+function modeFor(food: FoodChoice) {
   if (food.id) return "existing";
-  if (food.source === "off" && food.barcode) return missing.length === 0 ? "off" : "off_filled";
+  if (food.source === "off" && food.barcode) return "off_filled";
   return "manual";
 }
 
@@ -38,24 +38,30 @@ export function FoodPortionForm({
   onBack: () => void;
 }) {
   const missing = missingNutrients(food);
-  const mode = modeFor(food, missing);
-  const [grams, setGrams] = useState(toDecimalInput(food.serving_g ?? 100));
+  const mode = modeFor(food);
+  const { state: units, addUnit } = useFoodUnits(food.id);
+  // null = brugeren har ikke ændret noget endnu → brug forvalget
+  const [portion, setPortion] = useState<PortionValue | null>(null);
   const [filled, setFilled] = useState<Partial<Record<NutrientField, string>>>({});
   const [state, action, pending] = useActionState<FoodFormState, FormData>(logFood, {
     status: "idle",
   });
 
   // Tal pr. 100 g: fra varen, eller det brugeren har udfyldt
-  const value = (f: NutrientField) => food[f] ?? parseDecimal(filled[f] ?? "");
-  const per100 = Object.fromEntries(NUTRIENT_FIELDS.map((f) => [f, value(f)])) as Record<
+  const nutrient = (f: NutrientField) => food[f] ?? parseDecimal(filled[f] ?? "");
+  const per100 = Object.fromEntries(NUTRIENT_FIELDS.map((f) => [f, nutrient(f)])) as Record<
     NutrientField,
     number
   >;
-  const gramsValue = parseDecimal(grams);
-  const canCalculate =
-    gramsValue > 0 && NUTRIENT_FIELDS.every((f) => !Number.isNaN(per100[f]));
-  const macros = canCalculate ? macrosForGrams(per100, gramsValue) : null;
   const errors = state.fieldErrors ?? {};
+  const unitList = units.status === "ready" ? units.units : [];
+  const value: PortionValue | null =
+    portion ??
+    (units.status === "loading"
+      ? null
+      : toPortionValue(
+          pickPortion(unitList, units.status === "ready" ? units.last : null, food.serving_g ?? 100),
+        ));
 
   return (
     <form action={action} noValidate className="flex flex-col gap-space-lg">
@@ -119,30 +125,22 @@ export function FoodPortionForm({
         </div>
       )}
 
-      <DecimalField
-        id="grams"
-        name="grams"
-        label="Mængde (g)"
-        value={grams}
-        onChange={(e) => setGrams(e.target.value)}
-        error={errors.grams}
-      />
-
-      <div className="grid grid-cols-4 gap-space-xs border border-surface-container-high bg-surface-container-lowest p-space-sm text-center font-mono" aria-live="polite">
-        {[
-          ["kcal", macros?.kcal],
-          ["Protein", macros?.protein_g],
-          ["Kulh.", macros?.carbs_g],
-          ["Fedt", macros?.fat_g],
-        ].map(([label, v]) => (
-          <div key={String(label)}>
-            <p className="text-body-lg font-bold text-primary">
-              {typeof v === "number" ? formatNumber(label === "kcal" ? Math.round(v) : v) : "–"}
-            </p>
-            <p className="text-caption-mono uppercase text-secondary">{label}</p>
-          </div>
-        ))}
-      </div>
+      {value ? (
+        <PortionInput
+          idPrefix="log"
+          foodId={food.id}
+          units={unitList}
+          onUnitAdded={addUnit}
+          value={value}
+          onChange={setPortion}
+          per100={per100}
+          error={errors.grams ?? errors.quantity ?? errors.unit_id}
+        />
+      ) : (
+        <p role="status" className="font-mono text-caption-mono uppercase text-secondary">
+          Henter enheder …
+        </p>
+      )}
 
       <ChoiceButtons
         id="meal"
@@ -158,7 +156,7 @@ export function FoodPortionForm({
       )}
       {errors.dato && <FormMessage status="error">{errors.dato}</FormMessage>}
 
-      <SubmitButton pending={pending}>Log</SubmitButton>
+      <SubmitButton pending={pending || !value}>Log</SubmitButton>
     </form>
   );
 }

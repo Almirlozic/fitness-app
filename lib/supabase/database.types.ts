@@ -13,8 +13,37 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      food_units: {
+        Row: {
+          created_at: string;
+          food_id: string;
+          grams: number;
+          id: string;
+          name: string;
+          user_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          food_id: string;
+          grams: number;
+          id?: string;
+          name: string;
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          food_id?: string;
+          grams?: number;
+          id?: string;
+          name?: string;
+          user_id?: string | null;
+        };
+        Relationships: [];
+      };
       food_logs: {
         Row: {
+          unit_name: string | null;
+          quantity: number | null;
           carbs_g: number;
           created_at: string;
           eaten_on: string;
@@ -29,6 +58,8 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          unit_name?: string | null;
+          quantity?: number | null;
           carbs_g: number;
           created_at?: string;
           eaten_on?: string;
@@ -43,6 +74,8 @@ export type Database = {
           user_id?: string;
         };
         Update: {
+          unit_name?: string | null;
+          quantity?: number | null;
           carbs_g?: number;
           created_at?: string;
           eaten_on?: string;
@@ -200,6 +233,7 @@ export type Database = {
 
 export type SetRow = Database["public"]["Tables"]["sets"]["Row"];
 export type FoodRow = Database["public"]["Tables"]["foods"]["Row"];
+export type FoodUnitRow = Database["public"]["Tables"]["food_units"]["Row"];
 export type FoodLogRow = Database["public"]["Tables"]["food_logs"]["Row"];
 export type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
 export type SetInsert = Database["public"]["Tables"]["sets"]["Insert"];

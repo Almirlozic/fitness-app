@@ -1,8 +1,8 @@
 import "server-only";
-import { type FoodChoice, missingNutrients } from "./food-types";
+import { type FoodChoice, type FoodUnit, type LastPortion, missingNutrients } from "./food-types";
 import { fetchOffProduct } from "./off";
 import { createAdminClient } from "./supabase/admin";
-import type { FoodLogRow, FoodRow } from "./supabase/database.types";
+import type { FoodLogRow, FoodRow, FoodUnitRow } from "./supabase/database.types";
 import { createClient } from "./supabase/server";
 
 // Numeriske kolonner kan komme som tekst fra PostgREST
@@ -24,9 +24,14 @@ export function toFoodChoice(row: FoodRow): FoodChoice {
   };
 }
 
+export function toFoodUnit(row: FoodUnitRow): FoodUnit {
+  return { id: row.id, name: row.name, grams: n(row.grams), shared: row.user_id === null };
+}
+
 export function toFoodLog(row: FoodLogRow): FoodLogRow {
   return {
     ...row,
+    quantity: nOrNull(row.quantity),
     grams: n(row.grams),
     kcal: n(row.kcal),
     protein_g: n(row.protein_g),
@@ -98,7 +103,16 @@ async function cacheOffProduct(product: FoodChoice): Promise<FoodChoice> {
     })
     .select("*")
     .single();
-  if (data) return toFoodChoice(data);
+  if (data) {
+    // Kendt portionsstørrelse → fælles enhed "portion"
+    if (data.serving_g) {
+      const { error: unitError } = await admin
+        .from("food_units")
+        .insert({ food_id: data.id, user_id: null, name: "portion", grams: n(data.serving_g) });
+      if (unitError && unitError.code !== "23505") console.error("cacheOffProduct unit", unitError);
+    }
+    return toFoodChoice(data);
+  }
 
   // To samtidige opslag af samme stregkode: den anden får en unik-fejl og bruger den første
   if (error?.code === "23505" && product.barcode) {
@@ -180,3 +194,37 @@ export async function getFoodLogsForDay(date: string): Promise<FoodLogRow[]> {
   if (error) throw new Error(`Kunne ikke hente dagens mad: ${error.message}`);
   return data.map(toFoodLog);
 }
+
+/**
+ * Enheder for en fødevare: fælles + brugerens egne (via RLS). Har brugeren sin
+ * egen enhed med samme navn som en fælles, vises kun brugerens.
+ */
+export async function getFoodUnits(foodId: string): Promise<FoodUnit[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("food_units")
+    .select("*")
+    .eq("food_id", foodId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`Kunne ikke hente enheder: ${error.message}`);
+
+  const units = data.map(toFoodUnit);
+  const ownNames = new Set(units.filter((u) => !u.shared).map((u) => u.name.toLowerCase()));
+  return units.filter((u) => !u.shared || !ownNames.has(u.name.toLowerCase()));
+}
+
+/** Det, brugeren loggede sidst for varen (enhed og antal, eller gram) */
+export async function getLastPortion(foodId: string): Promise<LastPortion | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("food_logs")
+    .select("grams, quantity, unit_name")
+    .eq("food_id", foodId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data
+    ? { grams: n(data.grams), quantity: nOrNull(data.quantity), unit_name: data.unit_name }
+    : null;
+}
+
