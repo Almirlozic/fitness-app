@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { deleteCustomFood } from "@/app/(app)/kost/actions";
 import { type FoodChoice, missingNutrients } from "@/lib/food-types";
 import { formatNumber } from "@/lib/format";
+import { DeleteButton } from "../DeleteButton";
 import { TextField } from "../TextField";
 
 const MIN_CHARS = 2;
@@ -10,14 +12,23 @@ const DEBOUNCE_MS = 400;
 
 type OffResult = { query: string; items: FoodChoice[]; error?: string };
 
-function FoodRow({ food, onSelect }: { food: FoodChoice; onSelect: (f: FoodChoice) => void }) {
+function FoodRow({
+  food,
+  onSelect,
+  deletable = false,
+}: {
+  food: FoodChoice;
+  onSelect: (f: FoodChoice) => void;
+  /** Egne fødevarer kan slettes (fx hvis tallene er tastet forkert) */
+  deletable?: boolean;
+}) {
   const incomplete = missingNutrients(food).length > 0;
   return (
-    <li>
+    <li className="flex items-center gap-space-xs">
       <button
         type="button"
         onClick={() => onSelect(food)}
-        className="flex min-h-12 w-full items-center justify-between gap-space-md py-space-sm text-left hover:bg-surface-container-low"
+        className="flex min-h-12 min-w-0 flex-1 items-center justify-between gap-space-md py-space-sm text-left hover:bg-surface-container-low"
       >
         <span className="min-w-0">
           <span className="block truncate text-body-md text-primary">{food.name}</span>
@@ -35,6 +46,15 @@ function FoodRow({ food, onSelect }: { food: FoodChoice; onSelect: (f: FoodChoic
             : `${formatNumber(Math.round(food.kcal_100g))} kcal/100 g`}
         </span>
       </button>
+      {deletable && food.id && (
+        <DeleteButton
+          onDelete={deleteCustomFood.bind(null, food.id)}
+          label="Slet"
+          confirmLabel="Slet?"
+          ariaLabel={`Slet fødevaren ${food.name}`}
+          className="shrink-0 px-space-sm text-caption-mono"
+        />
+      )}
     </li>
   );
 }
@@ -124,7 +144,7 @@ export function FoodSearch({
         {ownMatches.length > 0 && (
           <Group title="Mine fødevarer">
             {ownMatches.map((f) => (
-              <FoodRow key={`o-${f.id}`} food={f} onSelect={onSelect} />
+              <FoodRow key={`o-${f.id}`} food={f} onSelect={onSelect} deletable />
             ))}
           </Group>
         )}

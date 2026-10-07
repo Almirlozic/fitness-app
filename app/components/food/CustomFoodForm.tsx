@@ -47,6 +47,27 @@ export function CustomFoodForm({
         ))}
       </div>
 
+      <p className="mt-space-sm font-mono text-label-tag uppercase text-secondary">
+        Enhed (valgfrit) – fx 1 stk = 55 g
+      </p>
+      <div className="grid grid-cols-2 gap-space-md">
+        <TextField
+          id="custom-unit-name"
+          name="unit_name"
+          label="Navn"
+          placeholder="fx stk"
+          autoComplete="off"
+          error={errors.unit_name}
+        />
+        <DecimalField
+          id="custom-unit-grams"
+          name="unit_grams"
+          label="1 enhed = gram"
+          placeholder="fx 55"
+          error={errors.unit_grams}
+        />
+      </div>
+
       <DecimalField
         id="custom-serving"
         name="serving_g"

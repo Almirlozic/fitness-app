@@ -63,6 +63,12 @@ export function AddFood({
     }
   }
 
+  /** OFF-varer fra søgningen slås op via stregkoden (caches + får "portion"-enhed) */
+  function selectFromSearch(food: FoodChoice) {
+    if (!food.id && food.source === "off" && food.barcode) lookUpBarcode(food.barcode);
+    else setSelected(food);
+  }
+
   function scanAgain() {
     setLookup({ status: "idle" });
     setScanRun((n) => n + 1);
@@ -104,7 +110,30 @@ export function AddFood({
         ))}
       </div>
 
-      {tab === "search" && <FoodSearch recent={recent} own={own} onSelect={setSelected} />}
+      {tab === "search" && lookup.status === "idle" && (
+        <FoodSearch recent={recent} own={own} onSelect={selectFromSearch} />
+      )}
+      {tab === "search" && lookup.status === "loading" && (
+        <p role="status" className="py-space-xl text-center font-mono text-caption-mono uppercase text-secondary">
+          Henter varen …
+        </p>
+      )}
+      {tab === "search" && (lookup.status === "error" || lookup.status === "not_found") && (
+        <div className="flex flex-col gap-space-md">
+          <FormMessage status="error">
+            {lookup.status === "error"
+              ? lookup.message
+              : "Varen kunne ikke findes hos Open Food Facts. Opret den selv."}
+          </FormMessage>
+          <button
+            type="button"
+            onClick={() => setLookup({ status: "idle" })}
+            className="min-h-11 w-full border border-primary text-label-caps uppercase tracking-widest text-primary"
+          >
+            [ Tilbage til søgning ]
+          </button>
+        </div>
+      )}
 
       {tab === "scan" && (
         <div role="tabpanel">

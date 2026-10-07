@@ -45,6 +45,30 @@ export const per100Schema = z.object({
   fat_100g: decimal("Skriv fedt pr. 100 g, fx 0,2", 0, 100, "Fedt skal være mellem 0 og 100 g pr. 100 g"),
 });
 
+/** Antal enheder, fx 4 eller 0,5 (komma og punktum, højst 2 decimaler) */
+export const quantitySchema = z
+  .string()
+  .trim()
+  .regex(/^\d{1,3}([.,]\d{1,2})?$/, "Skriv antallet som et tal, fx 4 eller 0,5")
+  .transform(parseDecimal)
+  .pipe(z.number().min(0.25, "Mindst 0,25").max(999, "Højst 999"));
+
+export const unitNameSchema = z
+  .string()
+  .trim()
+  .min(1, "Skriv et navn, fx stk eller skive")
+  .max(20, "Højst 20 tegn")
+  .transform((v) => v.replace(/\s+/g, " "));
+
+export const unitGramsSchema = decimal(
+  "Skriv vægten i gram, fx 55",
+  0.1,
+  5000,
+  "Vægten skal være mellem 0,1 og 5.000 g",
+).transform((g) => Math.round(g * 10) / 10);
+
+export const newUnitSchema = z.object({ name: unitNameSchema, grams: unitGramsSchema });
+
 export const customFoodSchema = z
   .object({
     name: z.string().trim().min(1, "Skriv et navn").max(120, "Navnet må højst være 120 tegn"),
@@ -61,6 +85,26 @@ export const customFoodSchema = z
       "Portionen skal være mellem 0,1 og 5.000 g",
     ),
   })
-  .extend(per100Schema.shape);
+  .extend(per100Schema.shape)
+  .extend({
+    unit_name: z.string().trim(),
+    unit_grams: z.string().trim(),
+  })
+  .transform((v, ctx) => {
+    const { unit_name, unit_grams, ...food } = v;
+    if (!unit_name && !unit_grams) return { ...food, unit: null };
+    const unit = newUnitSchema.safeParse({ name: unit_name, grams: unit_grams });
+    if (!unit.success) {
+      for (const issue of unit.error.issues) {
+        ctx.addIssue({
+          code: "custom",
+          message: issue.message,
+          path: [issue.path[0] === "name" ? "unit_name" : "unit_grams"],
+        });
+      }
+      return z.NEVER;
+    }
+    return { ...food, unit: unit.data };
+  });
 
 export type CustomFoodInput = z.output<typeof customFoodSchema>;

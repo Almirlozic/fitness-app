@@ -28,3 +28,20 @@ export type FoodChoice = {
 export function missingNutrients(food: Pick<FoodChoice, NutrientField>): NutrientField[] {
   return NUTRIENT_FIELDS.filter((f) => food[f] === null);
 }
+
+/** En enhed for en fødevare, fx "stk = 55 g" */
+export type FoodUnit = {
+  id: string;
+  name: string;
+  grams: number;
+  /** Fælles enhed (fx "portion" fra Open Food Facts) – ellers brugerens egen */
+  shared: boolean;
+};
+
+/** Hvad brugeren loggede sidst for en vare – bruges som forvalg */
+export type LastPortion = {
+  grams: number;
+  quantity: number | null;
+  unit_name: string | null;
+};
+

@@ -5,19 +5,21 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { fieldErrors } from "@/lib/auth-schemas";
 import { requireUser } from "@/lib/auth";
-import { macrosForGrams, type Per100g } from "@/lib/food";
+import { gramsFromUnit, macrosForGrams, type Per100g } from "@/lib/food";
 import {
+  type CustomFoodInput,
   barcodeSchema,
   customFoodSchema,
   dateSchema,
   gramsSchema,
   mealSchema,
+  newUnitSchema,
   per100Schema,
+  quantitySchema,
 } from "@/lib/food-schema";
-import type { FoodChoice } from "@/lib/food-types";
-import { resolveBarcode, toFoodChoice } from "@/lib/foods";
+import type { FoodChoice, FoodUnit } from "@/lib/food-types";
+import { toFoodChoice, toFoodUnit } from "@/lib/foods";
 import { formatNumber } from "@/lib/format";
-import { OFF_ERROR_MESSAGE, OffError } from "@/lib/off";
 import { createClient } from "@/lib/supabase/server";
 
 // Alle actions kræver login. Queries bruger brugerens session, så RLS gælder.
@@ -30,47 +32,127 @@ export type FoodFormState = {
   food?: FoodChoice;
 };
 
+const CUSTOM_FOOD_FIELDS = [
+  "name",
+  "brand",
+  "barcode",
+  "serving_g",
+  "kcal_100g",
+  "protein_100g",
+  "carbs_100g",
+  "fat_100g",
+  "unit_name",
+  "unit_grams",
+] as const;
+
 const read = (formData: FormData, key: string) => String(formData.get(key) ?? "");
+const readAll = (formData: FormData, keys: readonly string[]) =>
+  Object.fromEntries(keys.map((k) => [k, read(formData, k)]));
 
 function revalidateFood() {
   revalidatePath("/kost");
   revalidatePath("/kost/tilfoej");
 }
 
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+/** Gemmer (eller opdaterer) brugerens egen enhed. Samme navn = samme enhed. */
+async function saveOwnUnit(
+  supabase: Supabase,
+  userId: string,
+  foodId: string,
+  unit: { name: string; grams: number },
+): Promise<FoodUnit | null> {
+  const { data: existing } = await supabase
+    .from("food_units")
+    .select("id")
+    .eq("food_id", foodId)
+    .eq("user_id", userId)
+    .ilike("name", unit.name.replace(/[\\%_]/g, "\\$&"))
+    .maybeSingle();
+
+  const { data, error } = existing
+    ? await supabase.from("food_units").update({ grams: unit.grams }).eq("id", existing.id).select("*").single()
+    : await supabase
+        .from("food_units")
+        .insert({ food_id: foodId, user_id: userId, name: unit.name, grams: unit.grams })
+        .select("*")
+        .single();
+  if (error) {
+    console.error("saveOwnUnit", error.code, error.message);
+    return null;
+  }
+  return toFoodUnit(data);
+}
+
 /** Gemmer en egen fødevare. Har brugeren allerede én med samme stregkode, opdateres den. */
 async function saveCustomFood(
   userId: string,
-  food: z.output<typeof customFoodSchema>,
+  input: CustomFoodInput,
 ): Promise<{ food: FoodChoice } | { error: string }> {
   const supabase = await createClient();
+  const { unit, ...food } = input;
   const values = { ...food, source: "custom", created_by: userId };
 
-  if (food.barcode) {
-    const { data: existing } = await supabase
-      .from("foods")
-      .select("id")
-      .eq("source", "custom")
-      .eq("created_by", userId)
-      .eq("barcode", food.barcode)
-      .maybeSingle();
-    if (existing) {
-      const { data, error } = await supabase
+  let saved;
+  const { data: existing } = food.barcode
+    ? await supabase
         .from("foods")
-        .update(values)
-        .eq("id", existing.id)
-        .select("*")
-        .single();
-      if (error) return { error: "Fødevaren kunne ikke gemmes. Prøv igen." };
-      return { food: toFoodChoice(data) };
-    }
+        .select("id")
+        .eq("source", "custom")
+        .eq("created_by", userId)
+        .eq("barcode", food.barcode)
+        .maybeSingle()
+    : { data: null };
+  if (existing) {
+    saved = await supabase.from("foods").update(values).eq("id", existing.id).select("*").single();
+  } else {
+    saved = await supabase.from("foods").insert(values).select("*").single();
   }
-
-  const { data, error } = await supabase.from("foods").insert(values).select("*").single();
-  if (error) {
-    console.error("saveCustomFood", error.code, error.message);
+  if (saved.error) {
+    console.error("saveCustomFood", saved.error.code, saved.error.message);
     return { error: "Fødevaren kunne ikke gemmes. Prøv igen." };
   }
-  return { food: toFoodChoice(data) };
+
+  // Enheder: den valgfrie enhed fra formularen og "portion", hvis portionen er kendt
+  if (unit) await saveOwnUnit(supabase, userId, saved.data.id, unit);
+  if (food.serving_g) {
+    await saveOwnUnit(supabase, userId, saved.data.id, { name: "portion", grams: food.serving_g });
+  }
+  return { food: toFoodChoice(saved.data) };
+}
+
+/**
+ * Mængden fra formularen: enten gram, eller enhed + antal. Ved enhed slår
+ * serveren selv enhedens gram op – gram sendt fra klienten bruges ikke.
+ */
+const portionSchema = z.discriminatedUnion("portion", [
+  z.object({ portion: z.literal("grams"), grams: gramsSchema }),
+  z.object({ portion: z.literal("unit"), unit_id: z.uuid("Vælg en enhed"), quantity: quantitySchema }),
+]);
+
+type Portion = { grams: number; quantity: number | null; unit_name: string | null };
+
+async function resolvePortion(
+  supabase: Supabase,
+  foodId: string | null,
+  input: z.output<typeof portionSchema>,
+): Promise<Portion | { error: string; field: string }> {
+  if (input.portion === "grams") return { grams: input.grams, quantity: null, unit_name: null };
+  if (!foodId) return { error: "Varen har ingen enheder. Log i gram.", field: "quantity" };
+
+  // RLS: kun fælles og egne enheder er synlige. Enheden skal høre til varen.
+  const { data: unit } = await supabase
+    .from("food_units")
+    .select("*")
+    .eq("id", input.unit_id)
+    .eq("food_id", foodId)
+    .maybeSingle();
+  if (!unit) return { error: "Enheden findes ikke længere. Vælg en anden eller log i gram.", field: "unit_id" };
+
+  const grams = gramsFromUnit(input.quantity, Number(unit.grams));
+  if (grams > 5000) return { error: "Mængden må højst være 5.000 g", field: "quantity" };
+  return { grams, quantity: input.quantity, unit_name: unit.name };
 }
 
 // ---------------------------------------------------------------------
@@ -81,8 +163,7 @@ export async function createCustomFood(
   formData: FormData,
 ): Promise<FoodFormState> {
   const user = await requireUser();
-  const keys = Object.keys(customFoodSchema.shape);
-  const parsed = customFoodSchema.safeParse(Object.fromEntries(keys.map((k) => [k, read(formData, k)])));
+  const parsed = customFoodSchema.safeParse(readAll(formData, CUSTOM_FOOD_FIELDS));
   if (!parsed.success) {
     return { status: "error", message: "Tjek de markerede felter.", fieldErrors: fieldErrors(parsed.error) };
   }
@@ -94,34 +175,58 @@ export async function createCustomFood(
 }
 
 // ---------------------------------------------------------------------
+// Ny enhed til en fødevare ("+ Ny enhed" i log-formularen)
+// ---------------------------------------------------------------------
+export async function createFoodUnit(
+  foodId: string,
+  input: { name: string; grams: string },
+): Promise<{ unit?: FoodUnit; fieldErrors?: Partial<Record<"name" | "grams", string>> }> {
+  const user = await requireUser();
+  const parsed = newUnitSchema.safeParse(input);
+  if (!parsed.success) return { fieldErrors: fieldErrors(parsed.error) };
+  if (!z.uuid().safeParse(foodId).success) return { fieldErrors: { name: "Ukendt fødevare" } };
+
+  const supabase = await createClient();
+  // Varen skal være synlig for brugeren (OFF eller egen)
+  const { data: food } = await supabase.from("foods").select("id").eq("id", foodId).maybeSingle();
+  if (!food) return { fieldErrors: { name: "Fødevaren findes ikke længere" } };
+
+  const unit = await saveOwnUnit(supabase, user.id, foodId, parsed.data);
+  if (!unit) return { fieldErrors: { name: "Enheden kunne ikke gemmes. Prøv igen." } };
+  return { unit };
+}
+
+// ---------------------------------------------------------------------
 // Log en fødevare
 // ---------------------------------------------------------------------
 // mode:
-//  existing   – varen findes i foods (food_id); tallene hentes fra databasen
-//  off        – komplet OFF-vare fra søgningen; serveren henter selv tallene via
-//               stregkoden (så ingen kan skrive forkerte tal i den fælles cache)
+//  existing   – varen findes i foods (food_id); tallene hentes fra databasen.
+//               OFF-varer fra søgningen slås op (og caches) via stregkoden, før
+//               formularen åbnes, så de også er "existing".
 //  off_filled – OFF-vare, hvor brugeren har udfyldt manglende tal; gemmes som
 //               brugerens egen vare MED stregkoden, så tallene kun skal udfyldes én gang
 //  manual     – ingen vare i databasen (fx en slettet vare fra "Seneste")
 const logBaseSchema = z.object({
   dato: dateSchema,
   meal: mealSchema,
-  grams: gramsSchema,
-  mode: z.enum(["existing", "off", "off_filled", "manual"]),
+  mode: z.enum(["existing", "off_filled", "manual"]),
 });
 
 export async function logFood(_prev: FoodFormState, formData: FormData): Promise<FoodFormState> {
   const user = await requireUser();
-  const base = logBaseSchema.safeParse({
-    dato: read(formData, "dato"),
-    meal: read(formData, "meal"),
-    grams: read(formData, "grams"),
-    mode: read(formData, "mode"),
-  });
-  if (!base.success) {
-    return { status: "error", message: "Tjek de markerede felter.", fieldErrors: fieldErrors(base.error) };
+  const base = logBaseSchema.safeParse(readAll(formData, ["dato", "meal", "mode"]));
+  const portionInput = portionSchema.safeParse(readAll(formData, ["portion", "grams", "unit_id", "quantity"]));
+  if (!base.success || !portionInput.success) {
+    return {
+      status: "error",
+      message: "Tjek de markerede felter.",
+      fieldErrors: {
+        ...(base.success ? {} : fieldErrors(base.error)),
+        ...(portionInput.success ? {} : fieldErrors(portionInput.error)),
+      },
+    };
   }
-  const { dato, meal, grams, mode } = base.data;
+  const { dato, meal, mode } = base.data;
   const supabase = await createClient();
 
   let foodId: string | null = null;
@@ -137,48 +242,40 @@ export async function logFood(_prev: FoodFormState, formData: FormData): Promise
     foodId = food.id;
     name = food.name;
     per100 = food as Per100g;
-  } else if (mode === "off") {
-    const barcode = barcodeSchema.safeParse(read(formData, "barcode"));
-    if (!barcode.success) return { status: "error", message: barcode.error.issues[0].message };
-    try {
-      const result = await resolveBarcode(user.id, barcode.data);
-      if (result.status !== "found") {
-        return { status: "error", message: "Varen mangler tal. Udfyld dem og prøv igen." };
-      }
-      foodId = result.food.id;
-      name = result.food.name;
-      per100 = result.food as Per100g;
-    } catch (error) {
-      if (error instanceof OffError) return { status: "error", message: OFF_ERROR_MESSAGE };
-      throw error;
-    }
-  } else {
-    const keys = mode === "off_filled" ? Object.keys(customFoodSchema.shape) : Object.keys(per100Schema.shape);
-    const raw = Object.fromEntries(keys.map((k) => [k, read(formData, k)]));
-    const parsed = (mode === "off_filled" ? customFoodSchema : per100Schema).safeParse(raw);
+  } else if (mode === "off_filled") {
+    const parsed = customFoodSchema.safeParse(readAll(formData, CUSTOM_FOOD_FIELDS));
     if (!parsed.success) {
       return { status: "error", message: "Udfyld de manglende tal.", fieldErrors: fieldErrors(parsed.error) };
     }
-    per100 = parsed.data;
-    if (mode === "off_filled") {
-      const food = customFoodSchema.parse(raw);
-      if (!food.barcode) return { status: "error", message: "Stregkoden mangler." };
-      const saved = await saveCustomFood(user.id, food);
-      if ("error" in saved) return { status: "error", message: saved.error };
-      foodId = saved.food.id;
-      name = saved.food.name;
-    } else if (!name) {
-      return { status: "error", message: "Navnet mangler." };
+    if (!barcodeSchema.safeParse(parsed.data.barcode ?? "").success) {
+      return { status: "error", message: "Stregkoden mangler." };
     }
+    const saved = await saveCustomFood(user.id, parsed.data);
+    if ("error" in saved) return { status: "error", message: saved.error };
+    foodId = saved.food.id;
+    name = saved.food.name;
+    per100 = parsed.data;
+  } else {
+    const parsed = per100Schema.safeParse(readAll(formData, Object.keys(per100Schema.shape)));
+    if (!parsed.success) {
+      return { status: "error", message: "Udfyld de manglende tal.", fieldErrors: fieldErrors(parsed.error) };
+    }
+    if (!name) return { status: "error", message: "Navnet mangler." };
+    per100 = parsed.data;
   }
 
-  const macros = macrosForGrams(per100, grams);
+  const portion = await resolvePortion(supabase, foodId, portionInput.data);
+  if ("error" in portion) {
+    return { status: "error", message: portion.error, fieldErrors: { [portion.field]: portion.error } };
+  }
+
+  const macros = macrosForGrams(per100, portion.grams);
   const { error } = await supabase.from("food_logs").insert({
     eaten_on: dato,
     meal,
     food_id: foodId,
     food_name: name.slice(0, 200),
-    grams,
+    ...portion,
     ...macros,
   });
   if (error) {
@@ -187,7 +284,11 @@ export async function logFood(_prev: FoodFormState, formData: FormData): Promise
   }
 
   revalidateFood();
-  const besked = `Tilføjet: ${name} ${formatNumber(grams)} g · ${formatNumber(Math.round(macros.kcal))} kcal`;
+  const amount =
+    portion.unit_name && portion.quantity !== null
+      ? `${formatNumber(portion.quantity)} ${portion.unit_name}`
+      : `${formatNumber(portion.grams)} g`;
+  const besked = `Tilføjet: ${name} ${amount} · ${formatNumber(Math.round(macros.kcal))} kcal`;
   redirect(`/kost?dato=${dato}&besked=${encodeURIComponent(besked)}`);
 }
 
@@ -196,13 +297,14 @@ export async function logFood(_prev: FoodFormState, formData: FormData): Promise
 // ---------------------------------------------------------------------
 export async function updateFoodLog(
   id: string,
-  input: { grams: string; meal: string },
+  input: { meal: string; portion: string; grams?: string; unit_id?: string; quantity?: string },
 ): Promise<{ ok: boolean; error?: string }> {
   await requireUser();
-  const parsed = z
-    .object({ id: z.uuid(), grams: gramsSchema, meal: mealSchema })
-    .safeParse({ id, ...input });
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+  const meal = mealSchema.safeParse(input.meal);
+  const portionInput = portionSchema.safeParse(input);
+  if (!z.uuid().safeParse(id).success) return { ok: false, error: "Findes ikke længere." };
+  if (!meal.success) return { ok: false, error: meal.error.issues[0].message };
+  if (!portionInput.success) return { ok: false, error: portionInput.error.issues[0].message };
 
   const supabase = await createClient();
   const { data: log } = await supabase.from("food_logs").select("*").eq("id", id).maybeSingle();
@@ -224,9 +326,12 @@ export async function updateFoodLog(
     };
   }
 
+  const portion = await resolvePortion(supabase, log.food_id, portionInput.data);
+  if ("error" in portion) return { ok: false, error: portion.error };
+
   const { error } = await supabase
     .from("food_logs")
-    .update({ grams: parsed.data.grams, meal: parsed.data.meal, ...macrosForGrams(per100, parsed.data.grams) })
+    .update({ meal: meal.data, ...portion, ...macrosForGrams(per100, portion.grams) })
     .eq("id", id);
   if (error) {
     console.error("updateFoodLog", error.code, error.message);
@@ -248,3 +353,28 @@ export async function deleteFoodLog(id: string): Promise<{ ok: boolean }> {
   revalidateFood();
   return { ok: true };
 }
+
+/**
+ * Sletter en egen fødevare (fx oprettet med forkerte tal). RLS tillader kun
+ * egne custom-varer. Logs beholder navn og tal (food_id sættes til null),
+ * og varens enheder slettes med.
+ */
+export async function deleteCustomFood(id: string): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  if (!z.uuid().safeParse(id).success) return { ok: false };
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("foods")
+    .delete()
+    .eq("id", id)
+    .eq("source", "custom")
+    .eq("created_by", user.id)
+    .select("id");
+  if (error || data.length === 0) {
+    if (error) console.error("deleteCustomFood", error.code, error.message);
+    return { ok: false };
+  }
+  revalidateFood();
+  return { ok: true };
+}
+
