@@ -69,3 +69,30 @@ export function formatMonthShort(isoMonth: string) {
 export function todayIso(now = new Date()) {
   return new Intl.DateTimeFormat("en-CA", { timeZone: TIME_ZONE }).format(now);
 }
+
+/** "2026-10-07" + 1 → "2026-10-08" (kalenderdage, uafhængigt af tidszone) */
+export function addDays(isoDate: string, days: number) {
+  const d = parseIsoDate(isoDate);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+export function isIsoDate(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    parseIsoDate(value).toISOString().slice(0, 10) === value
+  );
+}
+
+/** "I dag", "I går" eller fx "Man. 5. okt" */
+export function formatDayLabel(isoDate: string, today = todayIso()) {
+  if (isoDate === today) return "I dag";
+  if (isoDate === addDays(today, -1)) return "I går";
+  const weekday = new Intl.DateTimeFormat("da-DK", { weekday: "short", timeZone: "UTC" }).format(
+    parseIsoDate(isoDate),
+  );
+  const dayMonth = formatDate(isoDate).replace(/ \d{4}$/, "");
+  return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${dayMonth}`;
+}
+

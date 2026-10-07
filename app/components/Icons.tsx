@@ -75,3 +75,28 @@ export function TrendIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function FoodIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="M7 3v8m-2.5-8v5a2.5 2.5 0 0 0 5 0V3M7 11v10" />
+      <path d="M17 21V3c-2 1-3.5 3.5-3.5 7v3H17" />
+    </svg>
+  );
+}
+
+export function ChevronLeftIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m15 5-7 7 7 7" strokeWidth={2} />
+    </svg>
+  );
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <path d="m9 5 7 7-7 7" strokeWidth={2} />
+    </svg>
+  );
+}
