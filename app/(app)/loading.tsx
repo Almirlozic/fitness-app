@@ -1,5 +1,5 @@
-import { AppHeader } from "./components/AppHeader";
-import { BottomNav } from "./components/BottomNav";
+import { AppHeader } from "@/app/components/AppHeader";
+import { BottomNav } from "@/app/components/BottomNav";
 
 function Bar({ className }: { className: string }) {
   return <div className={`animate-pulse bg-surface-container ${className}`} />;

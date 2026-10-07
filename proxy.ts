@@ -44,6 +44,10 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
+  // API-kald får 401 i stedet for en redirect til login-siden
+  if (!user && pathname.startsWith("/api/")) {
+    return NextResponse.json({ error: "Ikke logget ind" }, { status: 401 });
+  }
   if (!user && !isPublic(pathname)) {
     return redirectKeepingCookies(request, response, "/login");
   }
@@ -76,6 +80,6 @@ function redirectKeepingCookies(
 export const config = {
   matcher: [
     // Alt undtagen Next's statiske filer, billedoptimering og filer med billed-/ikon-endelser
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|wasm)$).*)",
   ],
 };

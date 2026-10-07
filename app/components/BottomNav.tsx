@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ComponentType, SVGProps } from "react";
-import { AccountIcon, GridIcon, TrendIcon } from "./Icons";
+import { AccountIcon, FoodIcon, GridIcon, TrendIcon } from "./Icons";
 
 type NavItem = {
   href: string;
@@ -11,6 +11,7 @@ type NavItem = {
 const items: NavItem[] = [
   { href: "/", label: "Overblik", Icon: GridIcon },
   { href: "/progression", label: "Progression", Icon: TrendIcon },
+  { href: "/kost", label: "Kost", Icon: FoodIcon },
   { href: "/profil", label: "Profil", Icon: AccountIcon },
 ];
 

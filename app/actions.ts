@@ -57,7 +57,7 @@ function readForm(formData: FormData, keys: string[]) {
 function revalidateExercises() {
   revalidatePath("/");
   revalidatePath("/progression");
-  revalidatePath("/ovelser/[name]", "page");
+  revalidatePath("/(app)/ovelser/[name]", "page");
 }
 
 /** Finder det navn, øvelsen allerede er gemt med (uanset store/små bogstaver) */

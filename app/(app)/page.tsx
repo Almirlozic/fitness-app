@@ -1,11 +1,11 @@
-import { AppHeader } from "./components/AppHeader";
-import { BottomNav } from "./components/BottomNav";
-import { ExerciseList } from "./components/ExerciseList";
-import { LedgerFooter } from "./components/LedgerFooter";
-import { LogSetPanel } from "./components/LogSetPanel";
-import { PageHero } from "./components/PageHero";
-import { StatsSummary } from "./components/StatsSummary";
-import { FormMessage } from "./components/TextField";
+import { AppHeader } from "@/app/components/AppHeader";
+import { BottomNav } from "@/app/components/BottomNav";
+import { ExerciseList } from "@/app/components/ExerciseList";
+import { LedgerFooter } from "@/app/components/LedgerFooter";
+import { LogSetPanel } from "@/app/components/LogSetPanel";
+import { PageHero } from "@/app/components/PageHero";
+import { StatsSummary } from "@/app/components/StatsSummary";
+import { FormMessage } from "@/app/components/TextField";
 import { formatPercent, todayIso } from "@/lib/format";
 import { getExerciseSummaries } from "@/lib/sets";
 
