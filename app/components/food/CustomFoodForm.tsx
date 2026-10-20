@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { type FoodFormState, createCustomFood } from "@/app/(app)/kost/actions";
-import { type FoodChoice, NUTRIENT_FIELDS, NUTRIENT_LABELS } from "@/lib/food-types";
+import { type AmountUnit, type FoodChoice, NUTRIENT_FIELDS, NUTRIENT_LABELS } from "@/lib/food-types";
+import { ChoiceButtons } from "../profile/ChoiceButtons";
 import { DecimalField } from "../DecimalField";
 import { FormMessage, SubmitButton, TextField } from "../TextField";
 
@@ -23,6 +24,9 @@ export function CustomFoodForm({
     { status: "idle" } as FoodFormState,
   );
   const errors = state.fieldErrors ?? {};
+  // Drikkevarer måles i ml; næringstal og portion følger enheden
+  const [amountUnit, setAmountUnit] = useState<AmountUnit>("g");
+  const unitWord = amountUnit === "ml" ? "ml" : "gram";
 
   return (
     <form action={action} noValidate className="flex flex-col gap-space-md">
@@ -38,8 +42,21 @@ export function CustomFoodForm({
         error={errors.brand}
       />
 
+      <input type="hidden" name="amount_unit" value={amountUnit} />
+      <ChoiceButtons
+        id="custom-amount-unit"
+        label="Måles i"
+        options={[
+          { value: "g", label: "Gram", hint: "Mad" },
+          { value: "ml", label: "Ml", hint: "Drikkevarer" },
+        ]}
+        value={amountUnit}
+        onChange={setAmountUnit}
+        error={errors.amount_unit}
+      />
+
       <p className="mt-space-sm font-mono text-label-tag uppercase text-secondary">
-        Næringsindhold pr. 100 g
+        Næringsindhold pr. 100 {amountUnit}
       </p>
       <div className="grid grid-cols-2 gap-space-md">
         {NUTRIENT_FIELDS.map((f) => (
@@ -48,7 +65,7 @@ export function CustomFoodForm({
       </div>
 
       <p className="mt-space-sm font-mono text-label-tag uppercase text-secondary">
-        Enhed (valgfrit) – fx 1 stk = 55 g
+        Enhed (valgfrit) – fx {amountUnit === "ml" ? "1 glas = 250 ml" : "1 stk = 55 g"}
       </p>
       <div className="grid grid-cols-2 gap-space-md">
         <TextField
@@ -62,8 +79,8 @@ export function CustomFoodForm({
         <DecimalField
           id="custom-unit-grams"
           name="unit_grams"
-          label="1 enhed = gram"
-          placeholder="fx 55"
+          label={`1 enhed = ${unitWord}`}
+          placeholder={amountUnit === "ml" ? "fx 250" : "fx 55"}
           error={errors.unit_grams}
         />
       </div>
@@ -71,7 +88,7 @@ export function CustomFoodForm({
       <DecimalField
         id="custom-serving"
         name="serving_g"
-        label="Portion i gram (valgfrit)"
+        label={`Portion i ${unitWord} (valgfrit)`}
         placeholder="fx 170"
         error={errors.serving_g}
       />

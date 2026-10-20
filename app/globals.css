@@ -17,6 +17,13 @@
   --color-outline: #747878;
   --color-outline-variant: #c4c7c7;
 
+  /* Figma-designet "Fitness-tracker" (lightmode) */
+  --color-cream: #fffcf3;
+  --color-navy: #2c3240;
+  --color-ink: #24201d;
+  --color-sand: #f2ece0;
+  --color-frame: #302f2d;
+
   --spacing-space-xs: 0.25rem;
   --spacing-space-sm: 0.5rem;
   --spacing-space-md: 1rem;
@@ -62,6 +69,8 @@
 @theme inline {
   --font-sans: var(--font-space-grotesk);
   --font-mono: var(--font-space-mono);
+  --font-serif: var(--font-inria-serif);
+  --font-inter: var(--font-inter-sans);
 }
 
 /*

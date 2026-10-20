@@ -21,10 +21,10 @@ const optionalDecimal = (message: string, min: number, max: number, rangeMessage
   z.union([z.literal("").transform(() => null), decimal(message, min, max, rangeMessage)]);
 
 export const gramsSchema = decimal(
-  "Skriv mængden i gram, fx 150 eller 12,5",
+  "Skriv mængden, fx 150 eller 12,5",
   0.1,
   5000,
-  "Mængden skal være mellem 0,1 og 5.000 g",
+  "Mængden skal være mellem 0,1 og 5.000",
 ).transform((g) => Math.round(g * 10) / 10);
 
 export const mealSchema = z.enum(MEAL_KEYS, "Vælg et måltid");
@@ -78,6 +78,7 @@ export const customFoodSchema = z
       .max(120, "Mærket må højst være 120 tegn")
       .transform((v) => v || null),
     barcode: z.union([z.literal("").transform(() => null), barcodeSchema]),
+    amount_unit: z.enum(["g", "ml"], "Vælg gram eller ml"),
     serving_g: optionalDecimal(
       "Skriv portionen i gram, fx 170",
       0.1,

@@ -6,7 +6,8 @@ import { type OffProduct, mapOffProduct } from "./off-map";
 // (ca. 15 produktopslag og 10 søgninger pr. minut pr. IP), så alt caches.
 
 const TIMEOUT_MS = 4000;
-const FIELDS = "code,product_name,product_name_da,product_name_en,brands,nutriments,serving_quantity";
+const FIELDS =
+  "code,product_name,product_name_da,product_name_en,brands,nutriments,serving_quantity,product_quantity_unit,serving_quantity_unit,categories_tags";
 
 export const OFF_ERROR_MESSAGE =
   "Kunne ikke hente fra Open Food Facts – prøv igen eller opret fødevaren selv";

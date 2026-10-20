@@ -1,72 +1,61 @@
-import { AppHeader } from "@/app/components/AppHeader";
 import { BottomNav } from "@/app/components/BottomNav";
-import { ExerciseList } from "@/app/components/ExerciseList";
-import { LedgerFooter } from "@/app/components/LedgerFooter";
+import { ExercisePicker } from "@/app/components/home/ExercisePicker";
+import { StrengthCard } from "@/app/components/home/StrengthCard";
 import { LogSetPanel } from "@/app/components/LogSetPanel";
-import { PageHero } from "@/app/components/PageHero";
-import { StatsSummary } from "@/app/components/StatsSummary";
 import { FormMessage } from "@/app/components/TextField";
-import { formatPercent, todayIso } from "@/lib/format";
+import { exerciseKey } from "@/lib/exercise-name";
+import { todayIso } from "@/lib/format";
 import { getExerciseSummaries } from "@/lib/sets";
 
+// Forsiden efter Figma-designet "Fitness-tracker" (node 1:25 "Progression - lightmode").
+// Afstande: titel 62 px fra toppen → 16 px → dropdown → 71 px → "SIDSTE BEDST" → 16 px → kort.
 export default async function ProgressionPage({ searchParams }: PageProps<"/">) {
-  const { besked } = await searchParams;
+  const { besked, ovelse } = await searchParams;
   const today = todayIso();
   const exercises = await getExerciseSummaries(today);
 
-  // Senest loggede øvelse med fremgang i denne måned
-  const improved = exercises.find(
-    (e) => e.thisMonth.kind === "change" && e.thisMonth.percent > 0,
-  );
+  // Valgt øvelse fra dropdown'en; "Alle øvelser" viser den senest loggede
+  const picked =
+    typeof ovelse === "string"
+      ? exercises.find((e) => e.key === exerciseKey(ovelse))
+      : undefined;
+  const shown = picked ?? exercises[0] ?? null;
 
   return (
-    <>
-      <AppHeader />
-      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-margin pt-16 pb-24 md:px-margin-tablet">
+    <div className="flex min-h-dvh flex-col bg-cream">
+      <main className="mx-auto flex w-full max-w-2xl flex-1 flex-col px-[27px] pt-[calc(env(safe-area-inset-top)+62px)] pb-[calc(env(safe-area-inset-bottom)+112px)]">
         {besked === "adgangskode-gemt" && (
-          <div className="mt-space-lg">
+          <div className="mb-space-md">
             <FormMessage status="success">Din adgangskode er gemt</FormMessage>
           </div>
         )}
-        <PageHero
-          title="Overblik"
-          description="Log et sæt, når du vil. Følg dine øvelser, seneste løft og vægtstigninger."
-        />
-        <StatsSummary
-          stats={[
-            {
-              label: "Registrerede øvelser",
-              value: String(exercises.length),
-              caption: "I alt i arkiv",
-            },
-            {
-              label: "Seneste forbedring",
-              value:
-                improved?.thisMonth.kind === "change"
-                  ? formatPercent(improved.thisMonth.percent)
-                  : "—",
-              caption: improved ? `↑ ${improved.name}` : "Ingen denne måned",
-              emphasizeCaption: Boolean(improved),
-            },
-          ]}
-        />
-        <LogSetPanel
-          defaultOpen={exercises.length === 0}
-          today={today}
-          ownExercises={exercises.map((e) => ({
-            name: e.name,
-            wgerExerciseId: e.wgerExerciseId,
-            lastWeightKg: e.latest.weight_kg,
-            lastReps: e.latest.reps,
-          }))}
-        />
-        <ExerciseList exercises={exercises} />
-        <LedgerFooter
-          left="[ Form øvelsesbibliotek ]"
-          right={`[ ${today.slice(0, 4)} / Protokol ]`}
-        />
+
+        <h1 className="font-serif text-[32px] leading-[38px] text-navy uppercase">Progression</h1>
+
+        <div className="mt-[16px]">
+          <ExercisePicker names={exercises.map((e) => e.name)} selected={picked?.name ?? ""} />
+        </div>
+
+        <h2 className="mt-[71px] font-inter text-[24px] leading-[29px] font-normal text-navy uppercase">
+          Sidste bedst
+        </h2>
+
+        <div className="mt-[16px]">
+          <StrengthCard exercise={shown} today={today}>
+            <LogSetPanel
+              defaultOpen={false}
+              today={today}
+              ownExercises={exercises.map((e) => ({
+                name: e.name,
+                wgerExerciseId: e.wgerExerciseId,
+                lastWeightKg: e.latest.weight_kg,
+                lastReps: e.latest.reps,
+              }))}
+            />
+          </StrengthCard>
+        </div>
       </main>
       <BottomNav activeHref="/" />
-    </>
+    </div>
   );
 }

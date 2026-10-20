@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   describeSinceStart,
+  describeThisMonthKg,
+  nextGoalKg,
   describeThisMonth,
   monthlyMax,
   sinceStart,
@@ -102,3 +104,39 @@ describe("monthlyMax", () => {
     expect(monthlyMax([set("2026-10-01", 0)])).toEqual([{ month: "2026-10", maxKg: 0 }]);
   });
 });
+
+describe("describeThisMonthKg", () => {
+  it("+10 kg siden sidste måned", () => {
+    expect(describeThisMonthKg([set("2026-09-10", 70), set("2026-10-05", 80)], TODAY)).toBe(
+      "+10\u00a0kg siden sidste måned",
+    );
+  });
+
+  it("fald og uændret", () => {
+    expect(describeThisMonthKg([set("2026-09-10", 80), set("2026-10-05", 77.5)], TODAY)).toBe(
+      "−2,5\u00a0kg siden sidste måned",
+    );
+    expect(describeThisMonthKg([set("2026-09-10", 80), set("2026-10-05", 80)], TODAY)).toBe(
+      "Samme som sidste måned",
+    );
+  });
+
+  it("ingen sæt denne måned / første måned", () => {
+    expect(describeThisMonthKg([set("2026-09-10", 80)], TODAY)).toBe("Ingen sæt i oktober");
+    expect(describeThisMonthKg([set("2026-10-01", 80)], TODAY)).toBe("Første måned");
+  });
+});
+
+describe("nextGoalKg", () => {
+  it("ca. 5 % mere, rundet op til 2,5 kg", () => {
+    expect(nextGoalKg(80)).toBe(85);
+    expect(nextGoalKg(100)).toBe(105);
+    expect(nextGoalKg(120)).toBe(127.5);
+  });
+
+  it("mindst 2,5 kg mere", () => {
+    expect(nextGoalKg(12)).toBe(14.5);
+    expect(nextGoalKg(0)).toBe(2.5);
+  });
+});
+

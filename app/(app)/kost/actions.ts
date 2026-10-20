@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { fieldErrors } from "@/lib/auth-schemas";
 import { requireUser } from "@/lib/auth";
-import { gramsFromUnit, macrosForGrams, type Per100g } from "@/lib/food";
+import { findMeasure, gramsFromUnit, macrosForGrams, type Per100g } from "@/lib/food";
 import {
   type CustomFoodInput,
   barcodeSchema,
@@ -17,9 +17,11 @@ import {
   per100Schema,
   quantitySchema,
 } from "@/lib/food-schema";
-import type { FoodChoice, FoodUnit } from "@/lib/food-types";
+import { type AmountUnit, type FoodChoice, type FoodUnit, isAmountUnit } from "@/lib/food-types";
 import { toFoodChoice, toFoodUnit } from "@/lib/foods";
 import { formatNumber } from "@/lib/format";
+import { GLASSES_PER_DAY } from "@/lib/kost";
+import { weightSchema } from "@/lib/profile-schema";
 import { createClient } from "@/lib/supabase/server";
 
 // Alle actions kræver login. Queries bruger brugerens session, så RLS gælder.
@@ -43,6 +45,7 @@ const CUSTOM_FOOD_FIELDS = [
   "fat_100g",
   "unit_name",
   "unit_grams",
+  "amount_unit",
 ] as const;
 
 const read = (formData: FormData, key: string) => String(formData.get(key) ?? "");
@@ -91,8 +94,9 @@ async function saveCustomFood(
   input: CustomFoodInput,
 ): Promise<{ food: FoodChoice } | { error: string }> {
   const supabase = await createClient();
-  const { unit, ...food } = input;
-  const values = { ...food, source: "custom", created_by: userId };
+  const { unit, amount_unit, ...food } = input;
+  // amount_unit (g/ml) gemmes som foods.unit
+  const values = { ...food, unit: amount_unit, source: "custom", created_by: userId };
 
   let saved;
   const { data: existing } = food.barcode
@@ -129,16 +133,38 @@ async function saveCustomFood(
 const portionSchema = z.discriminatedUnion("portion", [
   z.object({ portion: z.literal("grams"), grams: gramsSchema }),
   z.object({ portion: z.literal("unit"), unit_id: z.uuid("Vælg en enhed"), quantity: quantitySchema }),
+  // Standardmål: kg for mad, cl/dl/l for drikkevarer (fx 0,5 l)
+  z.object({ portion: z.literal("measure"), measure: z.string(), quantity: quantitySchema }),
 ]);
 
-type Portion = { grams: number; quantity: number | null; unit_name: string | null };
+/** grams er mængden i amount_unit (g eller ml) */
+type Portion = {
+  grams: number;
+  quantity: number | null;
+  unit_name: string | null;
+  amount_unit: AmountUnit;
+};
 
 async function resolvePortion(
   supabase: Supabase,
   foodId: string | null,
   input: z.output<typeof portionSchema>,
+  amountUnit: AmountUnit,
 ): Promise<Portion | { error: string; field: string }> {
-  if (input.portion === "grams") return { grams: input.grams, quantity: null, unit_name: null };
+  if (input.portion === "grams") {
+    return { grams: input.grams, quantity: null, unit_name: null, amount_unit: amountUnit };
+  }
+  if (input.portion === "measure") {
+    // Målet måles i sin egen enhed: "500 ml" gemmes som 500 ml, også for en vare i gram
+    const measure = findMeasure(amountUnit, input.measure);
+    if (!measure) return { error: "Vælg en gyldig enhed.", field: "measure" };
+    const grams = gramsFromUnit(input.quantity, measure.factor);
+    if (grams > 5000) return { error: `Mængden må højst være 5.000 ${measure.unit}`, field: "quantity" };
+    // ml og g er selve enheden ("500 ml"); cl/dl/l/kg huskes som antal + enhed ("0,5 l (500 ml)")
+    return measure.factor === 1
+      ? { grams, quantity: null, unit_name: null, amount_unit: measure.unit }
+      : { grams, quantity: input.quantity, unit_name: measure.name, amount_unit: measure.unit };
+  }
   if (!foodId) return { error: "Varen har ingen enheder. Log i gram.", field: "quantity" };
 
   // RLS: kun fælles og egne enheder er synlige. Enheden skal høre til varen.
@@ -152,7 +178,7 @@ async function resolvePortion(
 
   const grams = gramsFromUnit(input.quantity, Number(unit.grams));
   if (grams > 5000) return { error: "Mængden må højst være 5.000 g", field: "quantity" };
-  return { grams, quantity: input.quantity, unit_name: unit.name };
+  return { grams, quantity: input.quantity, unit_name: unit.name, amount_unit: amountUnit };
 }
 
 // ---------------------------------------------------------------------
@@ -215,7 +241,7 @@ const logBaseSchema = z.object({
 export async function logFood(_prev: FoodFormState, formData: FormData): Promise<FoodFormState> {
   const user = await requireUser();
   const base = logBaseSchema.safeParse(readAll(formData, ["dato", "meal", "mode"]));
-  const portionInput = portionSchema.safeParse(readAll(formData, ["portion", "grams", "unit_id", "quantity"]));
+  const portionInput = portionSchema.safeParse(readAll(formData, ["portion", "grams", "unit_id", "measure", "quantity"]));
   if (!base.success || !portionInput.success) {
     return {
       status: "error",
@@ -232,6 +258,8 @@ export async function logFood(_prev: FoodFormState, formData: FormData): Promise
   let foodId: string | null = null;
   let name = read(formData, "name").trim();
   let per100: Per100g;
+  // Gram eller ml – følger varen
+  let amountUnit: AmountUnit = "g";
 
   if (mode === "existing") {
     const id = z.uuid().safeParse(read(formData, "food_id"));
@@ -242,6 +270,7 @@ export async function logFood(_prev: FoodFormState, formData: FormData): Promise
     foodId = food.id;
     name = food.name;
     per100 = food as Per100g;
+    amountUnit = food.unit;
   } else if (mode === "off_filled") {
     const parsed = customFoodSchema.safeParse(readAll(formData, CUSTOM_FOOD_FIELDS));
     if (!parsed.success) {
@@ -255,6 +284,7 @@ export async function logFood(_prev: FoodFormState, formData: FormData): Promise
     foodId = saved.food.id;
     name = saved.food.name;
     per100 = parsed.data;
+    amountUnit = parsed.data.amount_unit;
   } else {
     const parsed = per100Schema.safeParse(readAll(formData, Object.keys(per100Schema.shape)));
     if (!parsed.success) {
@@ -262,9 +292,11 @@ export async function logFood(_prev: FoodFormState, formData: FormData): Promise
     }
     if (!name) return { status: "error", message: "Navnet mangler." };
     per100 = parsed.data;
+    const unit = read(formData, "amount_unit");
+    amountUnit = isAmountUnit(unit) ? unit : "g";
   }
 
-  const portion = await resolvePortion(supabase, foodId, portionInput.data);
+  const portion = await resolvePortion(supabase, foodId, portionInput.data, amountUnit);
   if ("error" in portion) {
     return { status: "error", message: portion.error, fieldErrors: { [portion.field]: portion.error } };
   }
@@ -287,9 +319,10 @@ export async function logFood(_prev: FoodFormState, formData: FormData): Promise
   const amount =
     portion.unit_name && portion.quantity !== null
       ? `${formatNumber(portion.quantity)} ${portion.unit_name}`
-      : `${formatNumber(portion.grams)} g`;
+      : `${formatNumber(portion.grams)} ${portion.amount_unit}`;
   const besked = `Tilføjet: ${name} ${amount} · ${formatNumber(Math.round(macros.kcal))} kcal`;
-  redirect(`/kost?dato=${dato}&besked=${encodeURIComponent(besked)}`);
+  // Tilbage til "Tilføj mad" for samme måltid, så man kan tilføje mere og trykke FÆRDIG
+  redirect(`/kost/tilfoej?meal=${meal}&dato=${dato}&besked=${encodeURIComponent(besked)}`);
 }
 
 // ---------------------------------------------------------------------
@@ -297,7 +330,14 @@ export async function logFood(_prev: FoodFormState, formData: FormData): Promise
 // ---------------------------------------------------------------------
 export async function updateFoodLog(
   id: string,
-  input: { meal: string; portion: string; grams?: string; unit_id?: string; quantity?: string },
+  input: {
+    meal: string;
+    portion: string;
+    grams?: string;
+    unit_id?: string;
+    measure?: string;
+    quantity?: string;
+  },
 ): Promise<{ ok: boolean; error?: string }> {
   await requireUser();
   const meal = mealSchema.safeParse(input.meal);
@@ -310,11 +350,16 @@ export async function updateFoodLog(
   const { data: log } = await supabase.from("food_logs").select("*").eq("id", id).maybeSingle();
   if (!log) return { ok: false, error: "Findes ikke længere." };
 
-  // Tallene pr. 100 g fra fødevaren, hvis den findes – ellers fra selve loggen
+  // Tallene pr. 100 og basisenheden fra fødevaren, hvis den findes – ellers fra loggen
   let per100: Per100g | null = null;
+  let baseUnit: AmountUnit = log.amount_unit === "ml" ? "ml" : "g";
   if (log.food_id) {
     const { data: food } = await supabase.from("foods").select("*").eq("id", log.food_id).maybeSingle();
-    if (food) per100 = toFoodChoice(food) as Per100g;
+    if (food) {
+      const choice = toFoodChoice(food);
+      per100 = choice as Per100g;
+      baseUnit = choice.unit;
+    }
   }
   if (!per100) {
     const f = 100 / Number(log.grams);
@@ -326,7 +371,7 @@ export async function updateFoodLog(
     };
   }
 
-  const portion = await resolvePortion(supabase, log.food_id, portionInput.data);
+  const portion = await resolvePortion(supabase, log.food_id, portionInput.data, baseUnit);
   if ("error" in portion) return { ok: false, error: portion.error };
 
   const { error } = await supabase
@@ -376,5 +421,75 @@ export async function deleteCustomFood(id: string): Promise<{ ok: boolean }> {
   }
   revalidateFood();
   return { ok: true };
+}
+
+// ---------------------------------------------------------------------
+// Vand og vægt (kostsidens header og vand-kort)
+// ---------------------------------------------------------------------
+export async function setWaterGlasses(dato: string, glasses: number): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  const parsed = z
+    .object({ dato: dateSchema, glasses: z.number().int().min(0).max(GLASSES_PER_DAY) })
+    .safeParse({ dato, glasses });
+  if (!parsed.success) return { ok: false };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("water_logs")
+    .upsert({ user_id: user.id, logged_on: parsed.data.dato, glasses: parsed.data.glasses });
+  if (error) {
+    console.error("setWaterGlasses", error.code, error.message);
+    return { ok: false };
+  }
+  revalidatePath("/kost");
+  return { ok: true };
+}
+
+export async function updateWeight(weight: string): Promise<{ ok: boolean; error?: string }> {
+  const user = await requireUser();
+  const parsed = weightSchema.safeParse(weight);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0].message };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({ weight_kg: parsed.data })
+    .eq("user_id", user.id);
+  if (error) {
+    console.error("updateWeight", error.code, error.message);
+    return { ok: false, error: "Vægten kunne ikke gemmes. Prøv igen." };
+  }
+  revalidatePath("/kost");
+  return { ok: true };
+}
+
+/**
+ * Gem rettelser fra "Vælg mængde"-siden (når man har trykket på noget, man har logget).
+ * Sender tilbage til kostsiden eller "Tilføj mad", alt efter hvor man kom fra.
+ */
+export async function saveFoodLogEdit(
+  _prev: FoodFormState,
+  formData: FormData,
+): Promise<FoodFormState> {
+  const fields = readAll(formData, ["log_id", "meal", "portion", "grams", "unit_id", "measure", "quantity"]);
+  const result = await updateFoodLog(fields.log_id, {
+    meal: fields.meal,
+    portion: fields.portion,
+    grams: fields.grams,
+    unit_id: fields.unit_id,
+    measure: fields.measure,
+    quantity: fields.quantity,
+  });
+  if (!result.ok) return { status: "error", message: result.error ?? "Kunne ikke gemme. Prøv igen." };
+
+  const dato = dateSchema.safeParse(read(formData, "dato"));
+  const meal = mealSchema.safeParse(fields.meal);
+  const date = dato.success ? dato.data : "";
+  const besked = encodeURIComponent("Rettelsen er gemt");
+  redirect(
+    read(formData, "tilbage") === "tilfoej" && meal.success
+      ? `/kost/tilfoej?meal=${meal.data}&dato=${date}&besked=${besked}`
+      : `/kost?dato=${date}&besked=${besked}`,
+  );
 }
 

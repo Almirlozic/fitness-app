@@ -3,6 +3,7 @@ import {
   addDays,
   formatDate,
   formatDayLabel,
+  formatDayMonthLong,
   formatKg,
   formatLift,
   formatPercent,
@@ -59,6 +60,13 @@ describe("datoer", () => {
   it("dags dato regnes i dansk tid lige efter midnat", () => {
     // 23:30 UTC den 6. = 01:30 dansk tid den 7.
     expect(todayIso(new Date("2026-10-06T23:30:00Z"))).toBe("2026-10-07");
+  });
+});
+
+describe("formatDayMonthLong", () => {
+  it("dag og fuldt månedsnavn uden år", () => {
+    expect(formatDayMonthLong("2026-10-04")).toBe("4. oktober");
+    expect(formatDayMonthLong("2026-05-01")).toBe("1. maj");
   });
 });
 

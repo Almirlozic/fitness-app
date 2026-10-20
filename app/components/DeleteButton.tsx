@@ -46,7 +46,7 @@ export function DeleteButton({
           setFailed(!ok);
         });
       }}
-      className={`min-h-11 font-mono uppercase text-error disabled:opacity-60 ${
+      className={`min-h-11 ${/\bfont-(inter|serif|sans|mono)\b/.test(className) ? "" : "font-mono"} uppercase text-error disabled:opacity-60 ${
         confirming ? "font-bold underline" : "hover:underline"
       } ${className}`}
     >

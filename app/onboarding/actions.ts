@@ -35,6 +35,8 @@ export async function completeOnboarding(
   const { error } = await supabase.from("profiles").upsert({
     user_id: user.id,
     ...parsed.data,
+    // Vægten ved onboarding er udgangspunktet for fremgangen mod målvægten
+    start_weight_kg: parsed.data.weight_kg,
     onboarding_completed_at: new Date().toISOString(),
   });
   if (error) {

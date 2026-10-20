@@ -96,3 +96,10 @@ export function formatDayLabel(isoDate: string, today = todayIso()) {
   return `${weekday.charAt(0).toUpperCase()}${weekday.slice(1)} ${dayMonth}`;
 }
 
+/** "2026-10-04" → "4. oktober" (uden år) */
+export function formatDayMonthLong(isoDate: string) {
+  return new Intl.DateTimeFormat("da-DK", { day: "numeric", month: "long", timeZone: "UTC" }).format(
+    parseIsoDate(isoDate),
+  );
+}
+
