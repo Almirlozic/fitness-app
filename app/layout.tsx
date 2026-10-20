@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Space_Grotesk, Space_Mono } from "next/font/google";
+import { Inria_Serif, Inter, Space_Grotesk, Space_Mono } from "next/font/google";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -12,6 +12,19 @@ const spaceMono = Space_Mono({
   variable: "--font-space-mono",
   subsets: ["latin"],
   weight: ["400", "700"],
+});
+
+// Skrifttyper fra Figma-designet "Fitness-tracker"
+const inriaSerif = Inria_Serif({
+  variable: "--font-inria-serif",
+  subsets: ["latin"],
+  weight: ["400"],
+});
+
+const inter = Inter({
+  variable: "--font-inter-sans",
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -30,7 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="da"
-      className={`${spaceGrotesk.variable} ${spaceMono.variable} h-full antialiased`}
+      className={`${spaceGrotesk.variable} ${spaceMono.variable} ${inriaSerif.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans text-body-md selection:bg-primary selection:text-on-primary">
         {children}

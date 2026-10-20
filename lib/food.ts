@@ -2,6 +2,9 @@
 
 import { formatNumber } from "./format";
 
+/** Standardenheder: mængden står i dem selv ("0,5 l", "1 kg") */
+const STANDARD_UNIT_NAMES = new Set(["g", "kg", "ml", "cl", "dl", "l"]);
+
 export const MEALS = [
   { key: "breakfast", label: "Morgenmad" },
   { key: "lunch", label: "Frokost" },
@@ -101,21 +104,25 @@ export function gramsFromUnit(quantity: number, unitGrams: number) {
   return round1(quantity * unitGrams);
 }
 
-/** "stk (55 g)" */
-export function formatUnitChip(unit: { name: string; grams: number }) {
-  return `${unit.name} (${formatNumber(unit.grams)} g)`;
+/** "stk (55 g)" – eller "dåse (330 ml)" for drikkevarer */
+export function formatUnitChip(unit: { name: string; grams: number }, amountUnit: "g" | "ml" = "g") {
+  return `${unit.name} (${formatNumber(unit.grams)} ${amountUnit})`;
 }
 
-/** "4 stk (220 g)" eller "200 g", hvis der ikke er logget i en enhed */
+/** "4 stk (220 g)", "330 ml" eller "200 g", hvis der ikke er logget i en enhed */
 export function formatPortion(log: {
   grams: number;
   quantity: number | null;
   unit_name: string | null;
+  /** "ml" for drikkevarer; mangler den, er det gram */
+  amount_unit?: string | null;
 }) {
-  const grams = `${formatNumber(log.grams)} g`;
-  return log.quantity !== null && log.unit_name
-    ? `${formatNumber(log.quantity)} ${log.unit_name} (${grams})`
-    : grams;
+  const grams = `${formatNumber(log.grams)} ${log.amount_unit === "ml" ? "ml" : "g"}`;
+  if (log.quantity === null || !log.unit_name) return grams;
+  // Standardmål står for sig selv ("0,5 l", "1 kg"); varens egne enheder får
+  // mængden med ("1 portion (500 g)")
+  const amount = `${formatNumber(log.quantity)} ${log.unit_name}`;
+  return STANDARD_UNIT_NAMES.has(log.unit_name) ? amount : `${amount} (${grams})`;
 }
 
 export type PortionChoice =
@@ -143,5 +150,39 @@ export function pickPortion(
   }
   if (units.length > 0) return { mode: "unit", unitId: units[0].id, quantity: 1 };
   return { mode: "grams", grams: fallbackGrams };
+}
+
+// ---------------------------------------------------------------------
+// Standardmål ud over basisenheden: kg, ml, cl, dl, l (og g for drikkevarer)
+// ---------------------------------------------------------------------
+/**
+ * Vælger man ml, måles det i ml; vælger man gram, måles det i gram. `unit` er det,
+ * mængden gemmes i, og `factor` er antal g/ml pr. enhed (fx l = 1.000 ml).
+ */
+export type Measure = { name: string; factor: number; unit: "g" | "ml" };
+
+const WEIGHT: Measure[] = [
+  { name: "g", factor: 1, unit: "g" },
+  { name: "kg", factor: 1000, unit: "g" },
+];
+const VOLUME: Measure[] = [
+  { name: "ml", factor: 1, unit: "ml" },
+  { name: "cl", factor: 10, unit: "ml" },
+  { name: "dl", factor: 100, unit: "ml" },
+  { name: "l", factor: 1000, unit: "ml" },
+];
+
+/** Alle mål for en vare – basisenheden (fx "g") vises separat og er ikke med her */
+export const MEASURES: Record<"g" | "ml", Measure[]> = {
+  g: [...WEIGHT.slice(1), ...VOLUME],
+  ml: [...VOLUME.slice(1), ...WEIGHT],
+};
+
+/**
+ * Standardenheden med navnet `name` (g, kg, ml, cl, dl, l) – uanset om varen
+ * ellers måles i gram eller ml. Vælger man ml, måles det i ml, osv.
+ */
+export function findMeasure(_amountUnit: "g" | "ml", name: string) {
+  return [...WEIGHT, ...VOLUME].find((m) => m.name === name);
 }
 

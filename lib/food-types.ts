@@ -10,6 +10,13 @@ export const NUTRIENT_LABELS: Record<NutrientField, string> = {
   fat_100g: "Fedt (g)",
 };
 
+/** Mængden måles i gram eller (for drikkevarer) ml. Næringstal er pr. 100 af enheden. */
+export type AmountUnit = "g" | "ml";
+
+export function isAmountUnit(value: unknown): value is AmountUnit {
+  return value === "g" || value === "ml";
+}
+
 /** En fødevare, som den vises i søgning/scanning. Tal kan mangle for OFF-varer. */
 export type FoodChoice = {
   /** Sat, når varen findes i vores foods-tabel */
@@ -23,6 +30,10 @@ export type FoodChoice = {
   carbs_100g: number | null;
   fat_100g: number | null;
   serving_g: number | null;
+  /** "ml" for drikkevarer – så logges og vises mængden i ml */
+  unit: AmountUnit;
+  /** For "Seneste"-varer, hvis fødevare er slettet: loggen, tallene kommer fra */
+  logId?: string;
 };
 
 export function missingNutrients(food: Pick<FoodChoice, NutrientField>): NutrientField[] {

@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 import { type LogSetState, logSet } from "@/app/actions";
 import { exerciseKey } from "@/lib/exercise-name";
 import { type ExerciseChoice, ExerciseSearch, type OwnExercise } from "./ExerciseSearch";
-import { CheckCircleIcon } from "./Icons";
 import { FieldError, Stepper, toDecimalInput } from "./Stepper";
 
 export function LogSetForm({
@@ -52,24 +51,24 @@ export function LogSetForm({
       id="log"
       action={formAction}
       noValidate
-      className="mb-space-xl scroll-mt-20 border-t-2 border-primary bg-surface-container-low p-space-md"
+      // Stilen følger Figma-designet: mørkeblå streg, Inter-overskrift som "Din styrke",
+      // Inria Serif-labels som "ALLE ØVELSER" og en knap som "OPRET ØVELSE"
+      className="scroll-mt-20 border-t border-navy pt-[24px] font-inter text-navy"
     >
-      <div className="mb-space-md flex items-start justify-between gap-space-md">
-        <h2 className="text-label-caps uppercase tracking-wider text-primary">
-          [ Log et sæt ]
-        </h2>
+      <div className="mb-[24px] flex items-center justify-between gap-space-md">
+        <h3 className="text-[18px] font-bold">Log et sæt</h3>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="-my-space-sm -mr-space-sm min-h-11 px-space-sm font-mono text-caption-mono uppercase text-secondary hover:text-primary"
+            className="-mr-space-sm min-h-11 px-space-sm font-serif text-[14px] uppercase underline underline-offset-[3px] hover:opacity-70"
           >
-            [ Luk ]
+            Luk
           </button>
         )}
       </div>
 
-      <div className="flex flex-col gap-space-md">
+      <div className="flex flex-col gap-[20px]">
         <ExerciseSearch
           value={name}
           onValueChange={(v) => {
@@ -92,6 +91,7 @@ export function LogSetForm({
             step={2.5}
             inputMode="decimal"
             error={errors.weight_kg}
+            tone="design"
           />
           <Stepper
             id="log-reps"
@@ -103,12 +103,13 @@ export function LogSetForm({
             min={1}
             inputMode="numeric"
             error={errors.reps}
+            tone="design"
           />
         </div>
 
         <div className="flex flex-col gap-space-xs">
-          <label htmlFor="log-date" className="font-mono text-label-tag uppercase text-secondary">
-            [ Dato ]
+          <label htmlFor="log-date" className="font-serif text-[14px] text-navy uppercase">
+            Dato
           </label>
           <input
             id="log-date"
@@ -117,7 +118,7 @@ export function LogSetForm({
             value={date}
             max={today}
             onChange={(e) => setDate(e.target.value)}
-            className="h-12 w-full border border-surface-container-high bg-surface-container-lowest px-space-sm font-mono text-body-lg text-primary focus:border-primary focus:outline-none"
+            className="h-14 w-full border border-navy bg-cream px-[12px] font-inter text-[16px] font-medium text-navy focus:outline-2 focus:outline-offset-2 focus:outline-navy"
           />
           {errors.performed_on && <FieldError>{errors.performed_on}</FieldError>}
         </div>
@@ -126,14 +127,13 @@ export function LogSetForm({
       <button
         type="submit"
         disabled={pending}
-        className="mt-space-md flex min-h-12 w-full items-center justify-center gap-space-xs bg-primary px-space-sm py-space-sm text-label-caps uppercase tracking-widest text-on-primary transition-colors hover:bg-primary-container disabled:opacity-60"
+        className="mt-[32px] flex h-[62px] w-full items-center justify-center bg-navy text-[18px] font-bold uppercase text-sand transition-opacity hover:opacity-90 active:scale-[0.99] disabled:opacity-60"
       >
-        <CheckCircleIcon width={18} height={18} className="shrink-0" />
-        <span>{pending ? "[ Gemmer … ]" : "[ + Gem sæt ]"}</span>
+        {pending ? "Gemmer …" : "Gem sæt"}
       </button>
 
-      <p role="status" className="mt-space-sm min-h-4 font-mono text-caption-mono uppercase">
-        {state.status === "success" && <span className="font-bold text-primary">{state.message}</span>}
+      <p role="status" className="mt-[12px] min-h-5 text-[14px] font-semibold">
+        {state.status === "success" && <span className="text-navy">{state.message}</span>}
         {state.status === "error" && state.message && <span className="text-error">{state.message}</span>}
       </p>
     </form>

@@ -3,7 +3,9 @@ import {
   dayTotals,
   formatPortion,
   formatUnitChip,
+  findMeasure,
   gramsFromUnit,
+  MEASURES,
   pickPortion,
   macrosForGrams,
   progressPercent,
@@ -138,6 +140,55 @@ describe("pickPortion (forvalg)", () => {
   it("intet logget før: første enhed med antal 1, ellers gram", () => {
     expect(pickPortion(units, null, 100)).toEqual({ mode: "unit", unitId: "u-stk", quantity: 1 });
     expect(pickPortion([], null, 170)).toEqual({ mode: "grams", grams: 170 });
+  });
+});
+
+describe("ml for drikkevarer", () => {
+  it("viser ml i stedet for gram", () => {
+    expect(formatPortion({ grams: 330, quantity: null, unit_name: null, amount_unit: "ml" })).toBe("330 ml");
+    expect(formatPortion({ grams: 660, quantity: 2, unit_name: "dåse", amount_unit: "ml" })).toBe(
+      "2 dåse (660 ml)",
+    );
+    // Standardenheder står for sig selv
+    expect(formatPortion({ grams: 500, quantity: 0.5, unit_name: "l", amount_unit: "ml" })).toBe("0,5 l");
+    expect(formatPortion({ grams: 1000, quantity: 1, unit_name: "kg", amount_unit: "g" })).toBe("1 kg");
+    expect(formatUnitChip({ name: "glas", grams: 250 }, "ml")).toBe("glas (250 ml)");
+  });
+
+  it("regner næringstal pr. 100 ml på samme måde", () => {
+    const cola = { kcal_100g: 42, protein_100g: 0, carbs_100g: 10.6, fat_100g: 0 };
+    expect(macrosForGrams(cola, 330).kcal).toBe(138.6);
+  });
+});
+
+describe("standardmål", () => {
+  it("ml og liter for alle varer – og g/kg også for drikkevarer", () => {
+    expect(MEASURES.g.map((m) => m.name)).toEqual(["kg", "ml", "cl", "dl", "l"]);
+    expect(MEASURES.ml.map((m) => m.name)).toEqual(["cl", "dl", "l", "g", "kg"]);
+  });
+
+  it("ml måles i ml – også for en vare, der normalt måles i gram", () => {
+    expect(findMeasure("g", "ml")).toEqual({ name: "ml", factor: 1, unit: "ml" });
+    expect(findMeasure("g", "l")?.unit).toBe("ml");
+    expect(findMeasure("ml", "g")?.unit).toBe("g");
+    expect(findMeasure("g", "kg")).toEqual({ name: "kg", factor: 1000, unit: "g" });
+    expect(gramsFromUnit(2, findMeasure("g", "dl")!.factor)).toBe(200);
+  });
+
+  it("0,5 l = 500 ml og 1,5 kg = 1.500 g", () => {
+    expect(gramsFromUnit(0.5, findMeasure("ml", "l")!.factor)).toBe(500);
+    expect(gramsFromUnit(1.5, findMeasure("g", "kg")!.factor)).toBe(1500);
+  });
+
+  it("ukendte mål findes ikke", () => {
+    expect(findMeasure("g", "spsk")).toBeUndefined();
+  });
+
+  it("alle standardenheder findes – også varens egen basisenhed", () => {
+    // Fejl fundet: en vare i gram, logget i ml, kunne ikke rettes ("Vælg en gyldig enhed")
+    expect(findMeasure("ml", "ml")).toEqual({ name: "ml", factor: 1, unit: "ml" });
+    expect(findMeasure("g", "g")).toEqual({ name: "g", factor: 1, unit: "g" });
+    expect(findMeasure("ml", "l")?.unit).toBe("ml");
   });
 });
 

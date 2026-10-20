@@ -1,40 +1,36 @@
 import Link from "next/link";
-import type { ComponentType, SVGProps } from "react";
-import { AccountIcon, FoodIcon, GridIcon, TrendIcon } from "./Icons";
 
-type NavItem = {
-  href: string;
-  label: string;
-  Icon: ComponentType<SVGProps<SVGSVGElement>>;
-};
-
-const items: NavItem[] = [
-  { href: "/", label: "Overblik", Icon: GridIcon },
-  { href: "/progression", label: "Progression", Icon: TrendIcon },
-  { href: "/kost", label: "Kost", Icon: FoodIcon },
-  { href: "/profil", label: "Profil", Icon: AccountIcon },
+const items = [
+  { href: "/", label: "Overblik" },
+  { href: "/progression", label: "Progression" },
+  { href: "/kost", label: "Kost" },
+  { href: "/profil", label: "Profil" },
 ];
 
+/**
+ * Bundmenuen fra Figma-designet: mørkeblå bjælke med lyse "[ LABEL ]"-felter.
+ * Selve feltet er 27 px højt som i designet, men hele linket er mindst 44 px
+ * (touch target).
+ */
 export function BottomNav({ activeHref }: { activeHref?: string }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-50 bg-surface/90 pb-[env(safe-area-inset-bottom)] shadow-[0_-1px_8px_rgba(0,0,0,0.04)] backdrop-blur-xl">
-      <ul className="mx-auto flex h-16 max-w-2xl items-center justify-around px-space-xs">
-        {items.map(({ href, label, Icon }) => {
+    <nav className="fixed inset-x-0 bottom-0 z-50 bg-navy pb-[env(safe-area-inset-bottom)]">
+      <ul className="mx-auto flex h-20 max-w-2xl items-center justify-between gap-space-sm px-5.75">
+        {items.map(({ href, label }) => {
           const active = href === activeHref;
           return (
-            <li key={href} className="flex h-full flex-1">
+            <li key={href}>
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-11 flex-1 flex-col items-center justify-center transition-colors ${
-                  active
-                    ? "font-bold text-primary"
-                    : "text-on-surface-variant hover:text-on-surface"
-                }`}
+                className="group flex min-h-11 items-center"
               >
-                <Icon />
-                <span className="mt-space-xs font-mono text-label-tag uppercase tracking-wider">
-                  [{label}]
+                <span
+                  className={`flex h-6.75 items-center bg-cream px-3 font-serif text-[10px] whitespace-nowrap text-navy uppercase transition-opacity group-hover:opacity-90 ${
+                    active ? "underline decoration-1 underline-offset-[3px]" : ""
+                  }`}
+                >
+                  [ {label} ]
                 </span>
               </Link>
             </li>

@@ -13,6 +13,27 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      water_logs: {
+        Row: {
+          glasses: number;
+          logged_on: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          glasses: number;
+          logged_on: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Update: {
+          glasses?: number;
+          logged_on?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       food_units: {
         Row: {
           created_at: string;
@@ -42,6 +63,7 @@ export type Database = {
       };
       food_logs: {
         Row: {
+          amount_unit: string;
           unit_name: string | null;
           quantity: number | null;
           carbs_g: number;
@@ -58,6 +80,7 @@ export type Database = {
           user_id: string;
         };
         Insert: {
+          amount_unit?: string;
           unit_name?: string | null;
           quantity?: number | null;
           carbs_g: number;
@@ -74,6 +97,7 @@ export type Database = {
           user_id?: string;
         };
         Update: {
+          amount_unit?: string;
           unit_name?: string | null;
           quantity?: number | null;
           carbs_g?: number;
@@ -93,6 +117,7 @@ export type Database = {
       };
       foods: {
         Row: {
+          unit: string;
           barcode: string | null;
           brand: string | null;
           carbs_100g: number;
@@ -108,6 +133,7 @@ export type Database = {
           updated_at: string;
         };
         Insert: {
+          unit?: string;
           barcode?: string | null;
           brand?: string | null;
           carbs_100g: number;
@@ -123,6 +149,7 @@ export type Database = {
           updated_at?: string;
         };
         Update: {
+          unit?: string;
           barcode?: string | null;
           brand?: string | null;
           carbs_100g?: number;
@@ -141,6 +168,7 @@ export type Database = {
       };
       profiles: {
         Row: {
+          start_weight_kg: number | null;
           birth_date: string | null;
           carbs_g: number | null;
           created_at: string;
@@ -157,6 +185,7 @@ export type Database = {
           weight_kg: number | null;
         };
         Insert: {
+          start_weight_kg?: number | null;
           birth_date?: string | null;
           carbs_g?: number | null;
           created_at?: string;
@@ -173,6 +202,7 @@ export type Database = {
           weight_kg?: number | null;
         };
         Update: {
+          start_weight_kg?: number | null;
           birth_date?: string | null;
           carbs_g?: number | null;
           created_at?: string;

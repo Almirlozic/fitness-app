@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { missingNutrients } from "./food-types";
-import { mapOffProduct } from "./off-map";
+import { mapOffProduct, offUnit } from "./off-map";
 
 describe("mapOffProduct", () => {
   it("omsætter et søgeresultat (brands som liste)", () => {
@@ -24,6 +24,7 @@ describe("mapOffProduct", () => {
       carbs_100g: 4,
       fat_100g: 0.2,
       serving_g: null,
+      unit: "g",
     });
   });
 
@@ -57,3 +58,30 @@ describe("mapOffProduct", () => {
     expect(mapOffProduct({ product_name: "Uden kode" })).toBeNull();
   });
 });
+
+describe("offUnit (drikkevarer i ml)", () => {
+  it("bruger enheden fra produkt-API'et", () => {
+    // Coca-Cola: product_quantity_unit "ml"
+    expect(offUnit({ product_quantity_unit: "ml", serving_quantity_unit: "ml" })).toBe("ml");
+    expect(offUnit({ product_quantity_unit: "g", categories_tags: ["en:beverages"] })).toBe("g");
+  });
+
+  it("falder tilbage på kategorien, når enheden mangler (søgning)", () => {
+    expect(offUnit({ categories_tags: ["en:beverages", "en:sweetened-beverages"] })).toBe("ml");
+    expect(offUnit({ categories_tags: ["en:dairies"] })).toBe("g");
+    expect(offUnit({})).toBe("g");
+  });
+
+  it("sættes på den omsatte vare", () => {
+    const cola = mapOffProduct({
+      code: "5449000000996",
+      product_name: "Coca-Cola Original",
+      product_quantity_unit: "ml",
+      serving_quantity: 330,
+      nutriments: { "energy-kcal_100g": 42, proteins_100g: 0, carbohydrates_100g: 10.6, fat_100g: 0 },
+    });
+    expect(cola?.unit).toBe("ml");
+    expect(cola?.serving_g).toBe(330);
+  });
+});
+

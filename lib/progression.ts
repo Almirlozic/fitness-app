@@ -1,4 +1,10 @@
-import { formatKg, formatMonthName, formatNumber, formatPercent } from "./format";
+import {
+  formatKg,
+  formatMonthName,
+  formatNumber,
+  formatPercent,
+  formatSignedKg,
+} from "./format";
 
 // Progression regnes KUN på kg. Reps indgår ikke.
 
@@ -105,3 +111,29 @@ export function describeSinceStart({ firstKg, latestKg, percent }: SinceStart) {
   const head = percent === null ? "Fra 0 kg" : formatPercent(percent);
   return `${head} · ${formatNumber(firstKg)} → ${formatKg(latestKg)}`;
 }
+
+/**
+ * Samme sammenligning som thisMonthChange, men i kg: max kg i indeværende
+ * måned minus max kg i alle måneder før. Fx "+10 kg siden sidste måned".
+ */
+export function describeThisMonthKg(sets: ProgressionSet[], today: string) {
+  const change = thisMonthChange(sets, today);
+  if (change.kind === "no-sets-this-month" || change.kind === "first-month") {
+    return describeThisMonth(change);
+  }
+  const month = today.slice(0, 7);
+  const current = maxKg(sets.filter((s) => monthOf(s.performed_on) === month));
+  const before = maxKg(sets.filter((s) => monthOf(s.performed_on) < month));
+  const diff = Math.round((current - before) * 100) / 100;
+  return diff === 0 ? "Samme som sidste måned" : `${formatSignedKg(diff)} siden sidste måned`;
+}
+
+/**
+ * Næste mål: ca. 5 % mere end nu, rundet op til nærmeste 2,5 kg (standard
+ * vægtskive-spring) – og mindst 2,5 kg mere. 80 kg → 85 kg, 12 kg → 14,5 kg.
+ */
+export function nextGoalKg(currentKg: number) {
+  const step = Math.max(2.5, Math.ceil((currentKg * 0.05) / 2.5) * 2.5);
+  return Math.round((currentKg + step) * 100) / 100;
+}
+

@@ -17,7 +17,7 @@ describe("gramsSchema", () => {
 
   it("giver danske fejlbeskeder", () => {
     expect(gramsSchema.safeParse("abc").error?.issues[0].message).toBe(
-      "Skriv mængden i gram, fx 150 eller 12,5",
+      "Skriv mængden, fx 150 eller 12,5",
     );
     expect(gramsSchema.safeParse("0").success).toBe(false);
   });
@@ -45,6 +45,7 @@ describe("customFoodSchema", () => {
     brand: "",
     barcode: "",
     serving_g: "",
+    amount_unit: "g",
     kcal_100g: "380",
     protein_100g: "12,5",
     carbs_100g: "55",
@@ -59,6 +60,7 @@ describe("customFoodSchema", () => {
       brand: null,
       barcode: null,
       serving_g: null,
+      amount_unit: "g",
       kcal_100g: 380,
       protein_100g: 12.5,
       carbs_100g: 55,
@@ -95,6 +97,7 @@ describe("enheder", () => {
       brand: "",
       barcode: "",
       serving_g: "",
+      amount_unit: "g",
       kcal_100g: "143",
       protein_100g: "12,6",
       carbs_100g: "0,7",

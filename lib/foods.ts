@@ -1,5 +1,11 @@
 import "server-only";
-import { type FoodChoice, type FoodUnit, type LastPortion, missingNutrients } from "./food-types";
+import {
+  type FoodChoice,
+  type FoodUnit,
+  type LastPortion,
+  isAmountUnit,
+  missingNutrients,
+} from "./food-types";
 import { fetchOffProduct } from "./off";
 import { createAdminClient } from "./supabase/admin";
 import type { FoodLogRow, FoodRow, FoodUnitRow } from "./supabase/database.types";
@@ -21,6 +27,7 @@ export function toFoodChoice(row: FoodRow): FoodChoice {
     carbs_100g: n(row.carbs_100g),
     fat_100g: n(row.fat_100g),
     serving_g: nOrNull(row.serving_g),
+    unit: isAmountUnit(row.unit) ? row.unit : "g",
   };
 }
 
@@ -99,6 +106,7 @@ async function cacheOffProduct(product: FoodChoice): Promise<FoodChoice> {
       carbs_100g: product.carbs_100g!,
       fat_100g: product.fat_100g!,
       serving_g: product.serving_g,
+      unit: product.unit,
       created_by: null,
     })
     .select("*")
@@ -142,7 +150,7 @@ export async function getRecentFoods(): Promise<FoodChoice[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("food_logs")
-    .select("food_id, food_name, grams, kcal, protein_g, carbs_g, fat_g, created_at")
+    .select("id, food_id, food_name, grams, amount_unit, kcal, protein_g, carbs_g, fat_g, created_at")
     .order("created_at", { ascending: false })
     .limit(60);
   if (error) throw new Error(`Kunne ikke hente seneste: ${error.message}`);
@@ -180,6 +188,8 @@ export async function getRecentFoods(): Promise<FoodChoice[]> {
       carbs_100g: per100(l.carbs_g),
       fat_100g: per100(l.fat_g),
       serving_g: null,
+      unit: isAmountUnit(l.amount_unit) ? l.amount_unit : ("g" as const),
+      logId: l.id,
     };
   });
 }
@@ -226,5 +236,73 @@ export async function getLastPortion(foodId: string): Promise<LastPortion | null
   return data
     ? { grams: n(data.grams), quantity: nOrNull(data.quantity), unit_name: data.unit_name }
     : null;
+}
+
+/**
+ * Antal glas vand på en dag (0, hvis intet er logget). null, hvis vandet ikke kan
+ * hentes – så vises resten af kostsiden stadig.
+ */
+export async function getWaterGlasses(date: string): Promise<number | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("water_logs")
+    .select("glasses")
+    .eq("logged_on", date)
+    .maybeSingle();
+  if (error) {
+    console.error("getWaterGlasses", error.code, error.message);
+    return null;
+  }
+  return data?.glasses ?? 0;
+}
+
+export type FoodForPortion =
+  | { status: "found"; food: FoodChoice }
+  /** Fundet hos Open Food Facts, men mangler tal, som brugeren skal udfylde */
+  | { status: "incomplete"; food: FoodChoice }
+  | { status: "not_found" };
+
+/** Fødevaren til "vælg mængde"-siden: ud fra id, stregkode eller en tidligere log */
+export async function getFoodForPortion(
+  userId: string,
+  ref: { id?: string; barcode?: string; logId?: string },
+): Promise<FoodForPortion> {
+  const supabase = await createClient();
+
+  if (ref.id) {
+    const { data } = await supabase.from("foods").select("*").eq("id", ref.id).maybeSingle();
+    return data ? { status: "found", food: toFoodChoice(data) } : { status: "not_found" };
+  }
+
+  if (ref.barcode) {
+    // Kaster OffError, hvis Open Food Facts fejler
+    return resolveBarcode(userId, ref.barcode);
+  }
+
+  if (ref.logId) {
+    // Varen er slettet: tallene pr. 100 regnes ud fra loggen
+    const { data: log } = await supabase.from("food_logs").select("*").eq("id", ref.logId).maybeSingle();
+    if (!log) return { status: "not_found" };
+    const per100 = (v: unknown) => Math.round((n(v) / n(log.grams)) * 100 * 100) / 100;
+    return {
+      status: "found",
+      food: {
+        id: null,
+        source: "custom",
+        barcode: null,
+        name: log.food_name,
+        brand: null,
+        kcal_100g: per100(log.kcal),
+        protein_100g: per100(log.protein_g),
+        carbs_100g: per100(log.carbs_g),
+        fat_100g: per100(log.fat_g),
+        serving_g: null,
+        unit: isAmountUnit(log.amount_unit) ? log.amount_unit : "g",
+        logId: log.id,
+      },
+    };
+  }
+
+  return { status: "not_found" };
 }
 

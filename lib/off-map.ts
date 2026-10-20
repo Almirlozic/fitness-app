@@ -1,4 +1,4 @@
-import type { FoodChoice } from "./food-types";
+import type { AmountUnit, FoodChoice } from "./food-types";
 
 // Omsætter Open Food Facts-svar til vores format. Ren funktion, så den kan testes.
 
@@ -12,7 +12,25 @@ export type OffProduct = {
   brands?: unknown;
   nutriments?: Nutriments;
   serving_quantity?: unknown;
+  product_quantity_unit?: unknown;
+  serving_quantity_unit?: unknown;
+  categories_tags?: unknown;
 };
+
+/**
+ * Drikkevarer måles i ml. OFF angiver enheden i product_quantity_unit /
+ * serving_quantity_unit ("ml" eller "g"); søgeresultater mangler den ofte, så
+ * kategorien en:beverages bruges som reserve – medmindre produktet angives i gram.
+ */
+export function offUnit(product: OffProduct): AmountUnit {
+  const units = [product.product_quantity_unit, product.serving_quantity_unit]
+    .filter((u): u is string => typeof u === "string")
+    .map((u) => u.trim().toLowerCase());
+  if (units.includes("ml") || units.includes("l") || units.includes("cl")) return "ml";
+  if (units.length > 0) return "g";
+  const categories = Array.isArray(product.categories_tags) ? product.categories_tags : [];
+  return categories.includes("en:beverages") ? "ml" : "g";
+}
 
 const KJ_PER_KCAL = 4.184;
 
@@ -56,5 +74,6 @@ export function mapOffProduct(product: OffProduct): FoodChoice | null {
     carbs_100g: num(n["carbohydrates_100g"]),
     fat_100g: num(n["fat_100g"]),
     serving_g: serving && serving > 0 && serving <= 5000 ? Math.round(serving * 10) / 10 : null,
+    unit: offUnit(product),
   };
 }

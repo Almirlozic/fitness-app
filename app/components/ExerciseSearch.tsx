@@ -142,8 +142,8 @@ export function ExerciseSearch({
 
   return (
     <div className="relative flex flex-col gap-space-xs">
-      <label htmlFor={`${listboxId}-input`} className="font-mono text-label-tag uppercase text-secondary">
-        [ Øvelse ]
+      <label htmlFor={`${listboxId}-input`} className="font-serif text-[14px] text-navy uppercase">
+        Øvelse
       </label>
       <input
         id={`${listboxId}-input`}
@@ -168,8 +168,8 @@ export function ExerciseSearch({
         aria-autocomplete="list"
         aria-activedescendant={active >= 0 ? `${listboxId}-${options[active]?.id}` : undefined}
         aria-invalid={error ? true : undefined}
-        className={`h-12 w-full border bg-surface-container-lowest px-space-sm text-body-lg text-primary placeholder:text-outline-variant focus:border-primary focus:outline-none ${
-          error ? "border-error" : "border-surface-container-high"
+        className={`h-14 w-full border bg-cream px-[12px] font-inter text-[16px] font-medium text-navy placeholder:text-navy/40 focus:outline-2 focus:outline-offset-2 focus:outline-navy ${
+          error ? "border-error" : "border-navy"
         }`}
       />
       {error && <FieldError>{error}</FieldError>}
@@ -179,14 +179,14 @@ export function ExerciseSearch({
           id={listboxId}
           role="listbox"
           aria-label="Forslag til øvelser"
-          className="absolute top-full right-0 left-0 z-40 mt-px max-h-80 overflow-y-auto border border-primary bg-surface-container-lowest shadow-[0_8px_24px_rgba(0,0,0,0.08)]"
+          className="absolute top-full right-0 left-0 z-40 -mt-px max-h-80 overflow-y-auto border border-navy bg-cream shadow-[0_8px_24px_rgba(44,50,64,0.12)]"
         >
           {options.map((option, i) => {
             const firstInGroup = options[i - 1]?.group !== option.group;
             return (
               <li key={option.id} role="presentation">
                 {firstInGroup && option.group !== "new" && (
-                  <div className="border-b border-surface-container-high bg-surface-container-low px-space-sm py-space-xs font-mono text-caption-mono uppercase text-secondary">
+                  <div className="border-b border-navy/20 bg-sand px-[12px] py-space-xs font-serif text-[12px] text-navy uppercase">
                     {option.group === "own" ? "[ Mine øvelser ]" : "[ Fra wger ]"}
                   </div>
                 )}
@@ -199,19 +199,19 @@ export function ExerciseSearch({
                     e.preventDefault();
                     choose(option);
                   }}
-                  className={`flex min-h-11 cursor-pointer items-center justify-between gap-space-sm border-b border-surface-container-high px-space-sm py-space-xs last:border-b-0 ${
-                    i === active ? "bg-surface-container" : "hover:bg-surface-container-low"
+                  className={`flex min-h-11 cursor-pointer items-center justify-between gap-space-sm border-b border-navy/15 px-[12px] py-space-xs font-inter last:border-b-0 ${
+                    i === active ? "bg-sand" : "hover:bg-sand/60"
                   }`}
                 >
                   {option.group === "new" ? (
-                    <span className="font-mono text-label-tag uppercase text-primary">
-                      [ + Brug “{option.name}” som ny øvelse ]
+                    <span className="text-[14px] font-semibold text-navy">
+                      + Brug “{option.name}” som ny øvelse
                     </span>
                   ) : (
                     <>
-                      <span className="text-body-md text-primary">{option.name}</span>
+                      <span className="text-[16px] font-medium text-navy">{option.name}</span>
                       {option.detail && (
-                        <span className="shrink-0 font-mono text-caption-mono uppercase text-secondary">
+                        <span className="shrink-0 text-[12px] font-medium text-ink/70">
                           {option.detail}
                         </span>
                       )}
@@ -224,7 +224,7 @@ export function ExerciseSearch({
           {loadingWger && (
             <li
               role="presentation"
-              className="px-space-sm py-space-sm font-mono text-caption-mono uppercase text-secondary"
+              className="px-[12px] py-space-sm font-inter text-[14px] text-ink/70"
             >
               Søger i wger…
             </li>

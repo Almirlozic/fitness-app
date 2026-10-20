@@ -25,6 +25,7 @@ export function Stepper({
   min = 0,
   inputMode,
   error,
+  tone = "classic",
 }: {
   id: string;
   name: string;
@@ -35,6 +36,8 @@ export function Stepper({
   min?: number;
   inputMode: "decimal" | "numeric";
   error?: string;
+  /** "design" = Figma-designet (creme/mørkeblå, Inria Serif-label) */
+  tone?: "classic" | "design";
 }) {
   const stepBy = (delta: number) => {
     const current = parseDecimal(value);
@@ -42,22 +45,37 @@ export function Stepper({
     onChange(toDecimalInput(next));
   };
   const errorId = `${id}-error`;
+  const design = tone === "design";
+  const buttonClass = design
+    ? "flex size-11 shrink-0 select-none items-center justify-center font-inter text-[20px] text-navy hover:bg-sand"
+    : "flex size-11 shrink-0 select-none items-center justify-center text-body-lg text-primary hover:bg-surface-container";
 
   return (
     <div className="flex flex-col gap-space-xs">
-      <label htmlFor={id} className="font-mono text-label-tag uppercase text-secondary">
-        [ {label} ]
+      <label
+        htmlFor={id}
+        className={
+          design
+            ? "font-serif text-[14px] text-navy uppercase"
+            : "font-mono text-label-tag uppercase text-secondary"
+        }
+      >
+        {design ? label : `[ ${label} ]`}
       </label>
       <div
-        className={`flex h-12 items-center justify-between border bg-surface-container-lowest ${
-          error ? "border-error" : "border-surface-container-high"
-        }`}
+        className={
+          design
+            ? `flex h-14 items-center justify-between border bg-cream ${error ? "border-error" : "border-navy"}`
+            : `flex h-12 items-center justify-between border bg-surface-container-lowest ${
+                error ? "border-error" : "border-surface-container-high"
+              }`
+        }
       >
         <button
           type="button"
           aria-label={`Mindre ${label.toLowerCase()}`}
           onClick={() => stepBy(-step)}
-          className="flex size-11 shrink-0 select-none items-center justify-center text-body-lg text-primary hover:bg-surface-container"
+          className={buttonClass}
         >
           −
         </button>
@@ -71,14 +89,18 @@ export function Stepper({
           onChange={(e) => onChange(e.target.value)}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
-          className="w-full min-w-0 bg-transparent text-center font-mono text-body-lg text-primary placeholder:text-outline-variant focus:outline-none"
+          className={
+            design
+              ? "w-full min-w-0 bg-transparent text-center font-inter text-[18px] font-bold text-navy placeholder:text-navy/40 focus:outline-none"
+              : "w-full min-w-0 bg-transparent text-center font-mono text-body-lg text-primary placeholder:text-outline-variant focus:outline-none"
+          }
           placeholder="–"
         />
         <button
           type="button"
           aria-label={`Mere ${label.toLowerCase()}`}
           onClick={() => stepBy(step)}
-          className="flex size-11 shrink-0 select-none items-center justify-center text-body-lg text-primary hover:bg-surface-container"
+          className={buttonClass}
         >
           +
         </button>
